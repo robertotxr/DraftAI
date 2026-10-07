@@ -125,8 +125,70 @@ def draft_text(row: pd.Series) -> str:
     return f"Round {int(row['round'])}, pick {int(row['pick'])} ({row['team']})"
 
 
-def setup(title: str, icon: str) -> None:
+INK = "#1f2430"
+CSS = f"""
+<style>
+.block-container {{padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1200px;}}
+header[data-testid="stHeader"] {{background: transparent;}}
+h1, h2, h3 {{color: {INK}; letter-spacing: -0.01em;}}
+h1 {{font-weight: 750 !important;}}
+div[data-testid="stVerticalBlockBorderWrapper"] {{border-radius: 14px; border-color: #e6e4de; background: #fbfaf8;}}
+div[data-testid="stMetric"] {{background: #fbfaf8; border: 1px solid #e6e4de; border-radius: 14px; padding: 14px 18px;}}
+div[data-testid="stMetricLabel"] p {{font-size: 0.8rem; color: #6b6963; font-weight: 500;}}
+div[data-testid="stMetricValue"] {{font-weight: 700; color: {INK};}}
+.sub {{color: #6b6963; font-size: 1.05rem; margin: -0.4rem 0 1.4rem;}}
+div[data-testid="stHorizontalBlock"] {{flex-wrap: wrap; row-gap: 0.75rem;}}
+div[data-testid="stColumn"] {{min-width: 200px;}}
+.kpi {{margin-bottom: 8px;}}
+.hero {{padding: 8px 0 4px;}}
+.hero h1 {{font-size: 3.2rem; margin: 0; line-height: 1.05;}}
+.hero p {{font-size: 1.25rem; color: #4a4843; margin: 0.5rem 0 0; max-width: 46rem;}}
+.kpi {{background: #fbfaf8; border: 1px solid #e6e4de; border-radius: 14px; padding: 18px 20px; min-height: 172px;}}
+.kpi .v {{font-size: 2.3rem; word-break: keep-all; font-weight: 750; line-height: 1.1;}}
+.kpi .l {{font-size: 0.92rem; font-weight: 600; color: {INK}; margin-top: 4px;}}
+.kpi .s {{font-size: 0.8rem; color: #6b6963; margin-top: 2px;}}
+.chip {{display: inline-block; padding: 2px 10px; border-radius: 99px; background: #eef3fb; color: {MODEL};
+  font-size: 0.8rem; font-weight: 600; margin-right: 6px;}}
+.pname {{font-size: 2.2rem; font-weight: 750; color: {INK}; line-height: 1.1;}}
+</style>
+"""
+
+
+def setup(title: str, icon: str, subtitle: str = "") -> None:
     st.set_page_config(page_title=f"{title} | DraftAI", page_icon=icon, layout="wide")
+    st.markdown(CSS, unsafe_allow_html=True)
+    if subtitle:
+        st.title(title)
+        st.markdown(f'<div class="sub">{subtitle}</div>', unsafe_allow_html=True)
+
+
+def kpi(value: str, label: str, sub: str = "", color: str = MODEL) -> None:
+    """Big-number card."""
+    st.markdown(
+        f'<div class="kpi"><div class="v" style="color:{color}">{value}</div><div class="l">{label}</div>'
+        f'<div class="s">{sub}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def style_fig(fig, height: int = 300, **layout):
+    """Consistent clean Plotly look."""
+    layout.setdefault("margin", dict(l=10, r=10, t=30, b=10))
+    fig.update_layout(height=height, plot_bgcolor="white", paper_bgcolor="white", font=dict(color=INK, size=13),
+                      **layout)  # fmt: skip
+    fig.update_xaxes(gridcolor="#eceae5", zeroline=False, linecolor="#d8d6d0")
+    fig.update_yaxes(gridcolor="#eceae5", zeroline=False, linecolor="#d8d6d0")
+    return fig
+
+
+def delta_text(v) -> str:
+    """Value over slot in points with an arrow."""
+    return "" if v is None or pd.isna(v) else f"{'▲' if v >= 0 else '▼'} {abs(v) * 100:.1f}"
+
+
+@st.cache_data(show_spinner=False)
+def load_report() -> dict:
+    return json.loads((path("artifacts") / "report_2021_2023.json").read_text())
 
 
 @st.cache_data(show_spinner=False)

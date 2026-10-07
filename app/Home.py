@@ -1,4 +1,4 @@
-"""DraftAI home: headline result, what the tool is, where to go next."""
+"""DraftAI home: headline results and navigation."""
 
 from __future__ import annotations
 
@@ -9,84 +9,96 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import streamlit as st  # noqa: E402
 
-from app.lib import MARKET, MODEL, load_board, load_metrics, pct, setup  # noqa: E402
+from app.lib import (  # noqa: E402
+    ATHLETIC,
+    MARKET,
+    MODEL,
+    kpi,
+    load_board,
+    load_metrics,
+    load_report,
+    pct,
+    pick_label,
+    setup,
+)
 
 setup("Home", ":material/sports_football:")
-m = load_metrics()
-board = load_board()
+m, rep, board = load_metrics(), load_report(), load_board()
 blend, slot = m["models"][m["chosen_model"]], m["models"]["pick_only"]
-boot = m["bootstrap_blend_vs_pick"]
-classes = m["classes"]
-
-st.title("DraftAI")
-st.subheader("How likely is a drafted player to become a starter, and what does the draft slot already tell you?")
+t40, und = rep["top40_upgrades"], rep["undrafted"]
+udfa_top = sum(s["model_pct_rank"] >= 0.84 for s in und["starters"])
 
 st.markdown(
-    """
-For every player drafted 2013-2026, plus the combine invitees who went undrafted, DraftAI estimates the chance he plays at least half of his team's
-snaps, on average, over his first three NFL seasons (our definition of a **starter**). It then asks the
-question front offices care about: **how much does that estimate differ from what the draft slot alone implies?**
-"""
+    '<div class="hero"><h1>DraftAI</h1><p>Which draft picks will become NFL starters, and where does the model '
+    "disagree with the draft slot?</p></div>",
+    unsafe_allow_html=True,
 )
+st.write("")
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Backtest players", f"{m['n_test']:,}", f"classes {classes[0]}-{classes[-1]}", delta_color="off")
-c2.metric("Starter base rate", pct(m["base_rate"]))
-c3.metric(
-    "Model + slot skill",
-    pct(blend["brier_skill"], 1),
-    f"{(blend['brier_skill'] - slot['brier_skill']) * 100:+.1f} pts vs slot only",
-)
-c4.metric("AUC (ranking quality)", f"{blend['auc']:.3f}", f"{blend['auc'] - slot['auc']:+.3f} vs slot only")
-
-st.markdown(
-    f"""
-**Headline.** Tested strictly out of sample (each class scored only with what was known on its draft night),
-the draft slot is already a strong predictor: it explains {pct(slot["brier_skill"])} of the variance a naive
-"everyone is {pct(m["base_rate"])}" guess leaves. Blending slot with college production and athletic testing
-lifts that to {pct(blend["brier_skill"], 1)}. The gain is small: a paired bootstrap puts the Brier improvement at
-{boot["brier_gain"]:.4f} (95% interval {boot["ci95"][0]:.4f} to {boot["ci95"][1]:.4f}), and the blend beats the
-slot in {pct(boot["p_better"])} of resamples. So the honest read is **the market is hard to beat, and the model is
-most useful at the margin**: flagging players the slot over- or under-rates, with a stated level of uncertainty.
-The 80% outcome range covers the real 3-year snap share {pct(m["interval_80_coverage"])} of the time,
-{"at or above its 80% target, so ranges are slightly conservative." if m["interval_80_coverage"] >= 0.8 else "below its 80% target, so treat ranges as slightly narrow."}
-"""
-)
-
-st.divider()
-left, right = st.columns(2)
-with left:
-    st.markdown("#### What you can do here")
-    st.page_link(
-        "pages/1_Big_Board.py",
-        label="Big Board: every class ranked by P(starter)",
-        icon=":material/format_list_numbered:",
-    )
-    st.page_link(
-        "pages/2_Player_Card.py", label="Player Card: one prospect in depth, with comps", icon=":material/person:"
-    )
-    st.page_link(
-        "pages/3_Tracking.py",
-        label="Tracking: Tackles Over Expected from Big Data Bowl data",
-        icon=":material/timeline:",
-    )
-    st.page_link(
-        "pages/4_Methodology.py", label="Methodology: how it works and where it falls short", icon=":material/science:"
-    )
-with right:
-    st.markdown("#### Reading the numbers")
-    st.markdown(
-        f"""
-- <span style="color:{MODEL}">**P(starter)**</span>: model probability of a 50%+ snap share over three seasons.
-- <span style="color:{MARKET}">**Slot-only P**</span>: the same probability from the pick number alone.
-- **Value over slot**: the gap between the two. Positive means the model likes him more than his pick.
-- **80% range**: where his 3-year average snap share should land 8 times out of 10.
-""",
-        unsafe_allow_html=True,
-    )
-
-n_udfa = int(board["undrafted"].sum())
+c = st.columns(4)
+with c[0]:
+    kpi(pct(t40["actual"], 1), "of the model's top-40 upgrades became starters", f"vs {pct(t40['slot'], 1)} expected from slot",
+        MODEL)  # fmt: skip
+with c[1]:
+    kpi(f"{blend['auc']:.3f}", "ranking accuracy (AUC)", f"vs {slot['auc']:.3f} from draft slot alone", MODEL)
+with c[2]:
+    kpi(pct(m["interval_80_coverage"]), "of outcomes inside the 80% range", "out of sample, 80% target", ATHLETIC)
+with c[3]:
+    kpi(f"{udfa_top} of {len(und['starters'])}", "undrafted starters ranked in model's top 16%",
+        f"{und['n']} undrafted invitees, classes 2017-2023", MARKET)  # fmt: skip
 st.caption(
-    f"{len(board) - n_udfa:,} drafted players and {n_udfa:,} undrafted combine invitees, classes "
-    f"{board['draft_year'].min()}-{board['draft_year'].max()}. Outcomes for the latest classes are still being observed."
+    f"Tested out of sample on classes {m['classes'][0]}-{m['classes'][-1]} ({m['n_test']:,} players). "
+    "The edge over the draft slot is small and not statistically significant."
 )
+
+st.write("")
+nav = [
+    ("pages/1_Big_Board.py", "Big Board", "Every class ranked by chance to start.", ":material/format_list_numbered:"),
+    ("pages/2_Player_Card.py", "Player Card", "One prospect in depth, with comps.", ":material/person:"),
+    ("pages/3_Tracking.py", "Tracking", "Closing Over Expected from tracking data.", ":material/timeline:"),
+    ("pages/4_Methodology.py", "Methodology", "How it works and where it falls short.", ":material/science:"),
+]
+for col, (page, name, line, icon) in zip(st.columns(4), nav, strict=True):
+    with col, st.container(border=True):
+        st.markdown(f"**{name}**")
+        st.caption(line)
+        st.page_link(page, label="Open", icon=icon)
+
+latest = board["draft_year"].max()
+top = board[(board["draft_year"] == latest) & (board["undrafted"] == 0)].nlargest(6, "value_over_slot")
+st.subheader(f"Biggest upgrades of the {latest} class")
+st.dataframe(
+    top.assign(
+        v=top["value_over_slot"] * 100,
+        p_starter=top["p_starter"] * 100,
+        p_pick_only=top["p_pick_only"] * 100,
+        pick=top["pick"].map(pick_label),
+    )[["pick", "player_name", "position", "college", "p_starter", "p_pick_only", "v"]].rename(
+        columns={
+            "pick": "Pick",
+            "player_name": "Player",
+            "position": "Pos",
+            "college": "College",
+            "p_starter": "P(starter)",
+            "p_pick_only": "Slot-only P",
+            "v": "Value over slot",
+        }
+    ),  # fmt: skip
+    hide_index=True,
+    width="stretch",
+    column_config={
+        "Pick": st.column_config.TextColumn(width="small"),
+        "P(starter)": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f%%"),
+        "Slot-only P": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f%%"),
+        "Value over slot": st.column_config.NumberColumn(format="▲ %.1f pts"),
+    },
+)
+with st.expander("How this works"):
+    st.markdown(
+        "- **Starter**: averages 50%+ of team snaps over his first three NFL seasons.\n"
+        f"- **P(starter)**: model chance. **Slot-only P**: chance from the pick number alone.\n"
+        "- **Value over slot**: the gap, in points. Positive means the model likes him more than his pick.\n"
+        f"- Covers {len(board) - int(board['undrafted'].sum()):,} drafted players and "
+        f"{int(board['undrafted'].sum()):,} undrafted combine invitees, "
+        f"{board['draft_year'].min()}-{board['draft_year'].max()}."
+    )
