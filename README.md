@@ -45,6 +45,8 @@ All numbers come from draft classes the model had never seen. Each class was sco
 4. **Compare.** Five nearest historical comps with known outcomes.
 5. **Track.** A ball-in-air coverage metric from Big Data Bowl player tracking.
 
+**Read the story:** [The 2023 draft, three years later](reports/draft_2023.md), a one-page look at which calls held up.
+
 The full backtest is in [reports/backtest_2021_2023.md](reports/backtest_2021_2023.md), and the technical detail is in [docs/methodology.md](docs/methodology.md).
 
 ## Run it

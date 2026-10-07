@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import matplotlib
+import matplotlib.ticker
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -90,6 +91,31 @@ def calls(df: pd.DataFrame, n: int = 8) -> dict[str, pd.DataFrame]:
     }
 
 
+def class_figure(df: pd.DataFrame, year: int, n: int = 40) -> dict:
+    """Slot-implied vs model vs actual starter rate for one class's top-n upgrades and downgrades."""
+    d = df[(df["draft_year"] == year) & (df["undrafted"] == 0)]
+    groups = {"Model's top 40 upgrades": d.nlargest(n, "value_over_slot"),
+              "Model's top 40 downgrades": d.nsmallest(n, "value_over_slot")}  # fmt: skip
+    t = pd.DataFrame({k: {"slot": g["p_pick_only"].mean(), "model": g["p_starter"].mean(), "actual": g["starter"].mean()}
+                      for k, g in groups.items()}).T  # fmt: skip
+    fig, ax = plt.subplots(figsize=(7, 3.6))
+    x, w = np.arange(len(t)), 0.26
+    for i, (col, color, label) in enumerate([("slot", MARKET, "Draft slot implied"), ("model", MODEL, "Model"),
+                                              ("actual", MUTED, "Actually became starters")]):  # fmt: skip
+        bars = ax.bar(x + (i - 1) * w, t[col], w * 0.92, color=color, label=label)
+        ax.bar_label(bars, [f"{v:.0%}" for v in t[col]], fontsize=9, color=INK, padding=2)
+    ax.set_xticks(x, t.index)
+    ax.set_ylim(0, max(0.7, t.to_numpy().max() + 0.1))
+    ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0))
+    ax.set_title(f"{year} draft class: did the model's calls hold up?", loc="left", fontsize=11, color=INK)
+    _style(ax)
+    ax.legend(frameon=False, fontsize=9, loc="upper right")
+    fig.tight_layout()
+    fig.savefig(path("figures") / f"class_{year}.png", dpi=160)
+    plt.close(fig)
+    return t.round(3).to_dict("index")
+
+
 def run() -> dict:
     allwf = load()
     df = allwf[allwf["draft_year"].isin(CLASSES) & (allwf["undrafted"] == 0)]
@@ -104,6 +130,7 @@ def run() -> dict:
                                "actual": down["starter"].mean()}  # fmt: skip
     base = json.loads((path("artifacts") / "metrics.json").read_text())["base_model"]
     out["undrafted"] = undrafted(base)
+    out["class_2023"] = class_figure(allwf, 2023)
     (path("artifacts") / "report_2021_2023.json").write_text(json.dumps(out, indent=2, default=str))
     return out
 
