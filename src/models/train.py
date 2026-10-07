@@ -18,7 +18,9 @@ import numpy as np
 import pandas as pd
 import shap
 from sklearn.calibration import CalibratedClassifierCV
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
 
 from src.config import cfg, path
 from src.db import Warehouse
@@ -53,8 +55,10 @@ def _design(df: pd.DataFrame, features: list[str], with_group: bool) -> pd.DataF
 def _fit_one(train: pd.DataFrame, features: list[str], learner: str, with_group: bool):
     y = train["starter"].astype(int)
     if learner == "logit":
-        X = train[features].astype(float).fillna(train[features].median())
-        return LogisticRegression(C=1.0).fit(X, y)
+        # Imputer is fitted on the training classes, so test rows never inform their own fill values.
+        return make_pipeline(SimpleImputer(strategy="median"), LogisticRegression(C=1.0)).fit(
+            train[features].astype(float), y
+        )
     X = _design(train, features, with_group)
     # Sigmoid calibration on internal CV folds of the training classes only. Small position groups
     # may have few starters, so folds shrink with the minority class (and calibration is skipped below 2).
@@ -66,8 +70,7 @@ def _fit_one(train: pd.DataFrame, features: list[str], learner: str, with_group:
 
 def _predict_one(model, df: pd.DataFrame, features: list[str], learner: str, with_group: bool) -> np.ndarray:
     if learner == "logit":
-        X = df[features].astype(float).fillna(df[features].median())
-        return model.predict_proba(X)[:, 1]
+        return model.predict_proba(df[features].astype(float))[:, 1]
     return model.predict_proba(_design(df, features, with_group))[:, 1]
 
 
@@ -145,6 +148,27 @@ def stack(wf: pd.DataFrame, model_spec: str) -> tuple[pd.Series, dict]:
     return out, weights
 
 
+def conformalize(wf: pd.DataFrame) -> pd.DataFrame:
+    """Conformalized quantile regression: widen q10/q90 so the 80% band covers 80% out of sample.
+
+    The widening for class Y is the empirical quantile of conformity scores max(q10 - y, y - q90) from
+    earlier walk-forward classes whose outcomes were known before the Y draft.
+    """
+    lag = cfg()["model"]["label_lag"]
+    lo, hi = cfg()["target"]["quantiles"][0], cfg()["target"]["quantiles"][-1]
+    orig, wf = wf, wf.copy()  # scores always come from the unwidened intervals
+    for year, te in orig.groupby("draft_year"):
+        cal = orig[(orig["draft_year"] <= year - lag) & orig["snap_share_3yr"].notna()]
+        if cal.empty:
+            continue
+        scores = np.maximum(cal["q10"] - cal["snap_share_3yr"], cal["snap_share_3yr"] - cal["q90"])
+        n = len(scores)
+        widen = float(np.quantile(scores, min(1.0, np.ceil((n + 1) * (hi - lo)) / n)))
+        wf.loc[te.index, "q10"] = (te["q10"] - widen).clip(0, 1)
+        wf.loc[te.index, "q90"] = (te["q90"] + widen).clip(0, 1)
+    return wf
+
+
 def confidence_grade(df: pd.DataFrame, width_cuts: tuple[float, float]) -> pd.Series:
     """High / Medium / Low from data completeness and outcome-interval width."""
     complete = (
@@ -167,7 +191,7 @@ def run() -> None:
 
     # 1) Walk-forward: every class that has at least two earlier labeled classes to learn from.
     years = list(range(c["model"]["walk_forward_from"], c["years"]["draft_last"] + 1))
-    wf = walk_forward(pros, years)
+    wf = conformalize(walk_forward(pros, years))
     # Pick the base model on the classes before the headline backtest, then blend it with the market.
     pre = wf[(wf["draft_year"] < min(c["model"]["backtest_classes"])) & wf["starter"].notna()]
     best = min(
@@ -207,7 +231,8 @@ def run() -> None:
     b = early[cols].assign(p_starter=p_early, p_pick_only=p_early_pick, q10=q_early[:, 0], q50=q_early[:, 1],
                            q90=q_early[:, 2], prediction_type="in_sample")  # fmt: skip
     pred = pd.concat([b, a], ignore_index=True)
-    w = pred["q90"] - pred["q10"]
+    # Width cut-offs from walk-forward rows only (in-sample intervals are narrower and not conformalized).
+    w = (pred["q90"] - pred["q10"])[pred["prediction_type"] == "walk_forward"]
     ctx = pred[["player_key"]].merge(pros[["player_key", "athletic_score", "college_seasons", "consensus_rank"]])
     pred["confidence"] = confidence_grade(pd.concat([ctx, pred[["q10", "q90"]]], axis=1),
                                           (w.quantile(0.4), w.quantile(0.8)))  # fmt: skip

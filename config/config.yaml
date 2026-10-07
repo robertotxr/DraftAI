@@ -50,8 +50,9 @@ athletic:
   lower_is_better: [forty, cone, shuttle]
   # Minimum number of measured drills for a composite score.
   min_drills: 3
-  # Norms come from combines up to this year, so backtest classes are scored against an older population.
-  norm_max_year: 2020
+  # Norms (and comp scaling) come from combines up to this year: every walk-forward class (2017+)
+  # is scored against a population that existed before its draft.
+  norm_max_year: 2016
 
 production:
   breakout_dominator: 0.20        # receivers / backs
@@ -81,8 +82,6 @@ comps:
   k: 5
 
 tracking:
-  frames_ahead: 5            # horizon (0.5 s) for the "tackle soon" label
-  contact_radius: 1.5        # yards
   min_opportunities: 20      # per player, for leaderboards
   intercept_seconds: 1.0     # carrier position is projected this far ahead for the pursuit angle
   opportunity_radius: 5.0    # yards; a defender-play counts as an opportunity if he got this close to the carrier

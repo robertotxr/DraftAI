@@ -46,12 +46,14 @@ def nan_distance(a: np.ndarray, B: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.sqrt(d), n
 
 
-def find_comps(pros: pd.DataFrame, k: int, lag: int) -> pd.DataFrame:
+def find_comps(pros: pd.DataFrame, k: int, lag: int, ref_max_year: int) -> pd.DataFrame:
     rows = []
     for group, g in pros.groupby("pos_group"):
         feats = comp_features(group)
         X = g[feats].astype(float)
-        Z = ((X - X.mean()) / X.std()).to_numpy()
+        # Scale from the reference classes only, so later classes never shape the distance metric.
+        ref = X[g["draft_year"] <= ref_max_year]
+        Z = ((X - ref.mean()) / ref.std()).to_numpy()
         years, labeled = g["draft_year"].to_numpy(), g["starter"].notna().to_numpy()
         keys = g["player_key"].to_numpy()
         for i in range(len(g)):
@@ -69,7 +71,7 @@ def find_comps(pros: pd.DataFrame, k: int, lag: int) -> pd.DataFrame:
 def run() -> None:
     wh = Warehouse()
     pros = wh.table("marts.prospects")
-    comps = find_comps(pros, cfg()["comps"]["k"], cfg()["model"]["label_lag"])
+    comps = find_comps(pros, cfg()["comps"]["k"], cfg()["model"]["label_lag"], cfg()["athletic"]["norm_max_year"])
     # Similarity on a 0-100 scale for display: 100 = identical profile.
     comps["similarity"] = (100 * np.exp(-comps["distance"])).round(1)
     wh.write("marts.comps", comps)

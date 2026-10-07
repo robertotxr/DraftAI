@@ -12,7 +12,7 @@ from src.config import cfg, path
 from src.tracking import data
 from src.tracking.animate import animation_frames
 from src.tracking.data import KEYS
-from src.tracking.metric import defender_frames, defender_plays, fit_oof, leaderboard
+from src.tracking.metric import decision_points, defender_frames, defender_plays, fit_oof, leaderboard
 from src.tracking.validate import validate
 
 log = logging.getLogger(__name__)
@@ -39,10 +39,11 @@ def run(weeks: list[int] | None = None) -> dict | None:
         samples.append(track.merge(pick, on=KEYS))
         log.info("week %d: %d defender-frames", w, len(df))
     frames = pd.concat(frames, ignore_index=True)
-    frames["proba"] = fit_oof(frames)
-    dp = defender_plays(frames, tackles)
+    dec = decision_points(frames)
+    dec["proba"], frames["proba"] = fit_oof(dec, frames)
+    dp = defender_plays(dec, frames, tackles)
     lb = leaderboard(dp, static["players"])
-    report = validate(frames, dp, lb)
+    report = validate(dec, dp, lb)
 
     out = path("artifacts") / "tracking"
     out.mkdir(parents=True, exist_ok=True)

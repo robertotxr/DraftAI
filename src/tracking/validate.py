@@ -28,11 +28,11 @@ def calibration_bins(y: np.ndarray, p: np.ndarray, bins: int = 10) -> tuple[list
     return [float(p[c].mean()) for c in chunks if len(c)], [float(y[c].mean()) for c in chunks if len(c)]
 
 
-def validate(frames: pd.DataFrame, dp: pd.DataFrame, lb: pd.DataFrame, figures: bool = True) -> dict:
-    """frames: defender-frames with `label` and `proba`; dp: defender_plays output; lb: leaderboard."""
-    y, p = frames["label"].to_numpy(), frames["proba"].to_numpy()
-    out: dict = {"n_frames": int(len(y)), "base_rate": float(y.mean()), "n_players": int(len(lb))}
-    out["frame_model"] = (
+def validate(dec: pd.DataFrame, dp: pd.DataFrame, lb: pd.DataFrame, figures: bool = True) -> dict:
+    """dec: decision points with `label` and `proba`; dp: defender_plays output; lb: leaderboard."""
+    y, p = dec["label"].to_numpy(), dec["proba"].to_numpy()
+    out: dict = {"n_decisions": int(len(y)), "base_rate": float(y.mean()), "n_players": int(len(lb))}
+    out["decision_model"] = (
         score(y, p) if 0 < y.sum() < len(y) else {"brier": float(((p - y) ** 2).mean()), "ece": ece(y, p)}
     )
     sh = split_half(dp)
@@ -57,7 +57,7 @@ def _figures(y: np.ndarray, p: np.ndarray, sh: pd.DataFrame, ok: pd.DataFrame) -
     fig, ax = plt.subplots(figsize=(5.2, 5))
     ax.plot([0, max(xs + ys)], [0, max(xs + ys)], color=MUTED, linewidth=1, linestyle="--", label="Perfect calibration")
     ax.plot(xs, ys, color=MODEL, linewidth=2, marker="o", markeredgecolor="white", label="Tackle model (out of fold)")
-    ax.set(xlabel="Predicted P(tackle soon)", ylabel="Observed rate")
+    ax.set(xlabel="Predicted P(tackle) at decision point", ylabel="Observed rate")
     ax.set_title("Tackle model calibration on held-out games", loc="left", fontsize=11, color=INK)
     _style(ax)
     ax.legend(frameon=False, fontsize=9)

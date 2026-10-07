@@ -39,7 +39,7 @@ def _pros(seed=0):
 def test_find_comps_respects_time_labels_group_and_ranking():
     pros = _pros()
     k = 5
-    comps = find_comps(pros, k=k, lag=LAG)
+    comps = find_comps(pros, k=k, lag=LAG, ref_max_year=int(pros["draft_year"].max()))
     assert len(comps)
     info = pros.set_index("player_key")
     me, other = info.loc[comps["player_key"]], info.loc[comps["comp_key"]]

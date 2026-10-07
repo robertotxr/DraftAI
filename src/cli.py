@@ -1,4 +1,4 @@
-"""Pipeline entrypoint: python -m src.cli <step> [<step> ...]   (steps: ingest features train comps tracking all)"""
+"""Pipeline entrypoint: python -m src.cli <step> [<step> ...]   (steps: ingest features train comps tracking report all)"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import argparse
 import logging
 import warnings
 
-STEPS = ["ingest", "features", "train", "comps", "tracking"]
+STEPS = ["ingest", "features", "train", "comps", "tracking", "report"]
 
 
 def run_step(step: str) -> None:
@@ -30,6 +30,10 @@ def run_step(step: str) -> None:
         from src.tracking import run
 
         run.run()
+    elif step == "report":
+        from src.models import report
+
+        report.run()
 
 
 def main() -> None:

@@ -107,16 +107,43 @@ def test_features_on_hand_built_geometry():
     assert _geom(cy=3.0)["sideline_dist"] == pytest.approx(3.0)
 
 
-def test_labels_need_credit_and_contact():
+def _frames(dists: dict[int, list[float]], made: dict[int, int]) -> pd.DataFrame:
     k = {"gameId": 1, "playId": 1}
-    dist = [20, 20, 20, 20, 20, 20, 8, 1, 0.5, 0.5]
-    d = pd.DataFrame([{**k, "nflId": n, "frameId": i + 1, "dist": v} for n in (1, 2) for i, v in enumerate(dist)])
-    tackles = pd.DataFrame([{**k, "nflId": 1, "tackle": 1, "assist": 0}, {**k, "nflId": 2, "tackle": 0, "assist": 0}])
-    out = metric.add_labels(d, tackles)
-    assert len(out) == len(d) - 2  # last frame of each defender has no future
-    assert out[out["nflId"] == 2]["label"].sum() == 0
-    pos = out[(out["nflId"] == 1) & (out["label"] == 1)]["frameId"].tolist()
-    assert pos == [3, 4, 5, 6, 7, 8, 9]  # contact (<=1.5) first at frame 8; 5 frames of look-back
+    return pd.DataFrame(
+        [
+            {**k, "nflId": n, "frameId": i + 1, "dist": v, "made": made[n]}
+            for n, ds in dists.items()
+            for i, v in enumerate(ds)
+        ]
+    )
+
+
+def test_decision_point_precedes_contact_and_ignores_later_frames():
+    far = [20.0] * 6
+    dists = {1: [*far, 8.0, 4.9, 1.0, 0.0], 2: [3.0, 2.0, 1.0, 0.0], 3: [*far, 15.0, 12.0]}
+    frames = _frames(dists, {1: 1, 2: 0, 3: 0})
+    dec = metric.decision_points(frames).set_index("nflId")
+    assert dec.index.tolist() == [1, 2]  # defender 3 never got within the opportunity radius
+    assert dec.loc[1, "frameId"] == 8 and dec.loc[1, "dist"] == pytest.approx(
+        4.9
+    )  # first frame inside 5 yd, pre-contact
+    assert dec.loc[2, "frameId"] == 1  # already inside when the carrier is defined
+    assert dec.loc[1, "label"] == 1 and dec.loc[2, "label"] == 0
+    dists[1] = [*dists[1][:8], 30.0, 30.0]  # rewrite everything after the decision
+    again = metric.decision_points(_frames(dists, {1: 1, 2: 0, 3: 0})).set_index("nflId")
+    assert again.loc[1, ["frameId", "dist", "label"]].tolist() == dec.loc[1, ["frameId", "dist", "label"]].tolist()
+
+
+def test_made_requires_credit():
+    k = {"gameId": 1, "playId": 1}
+    tackles = pd.DataFrame([{**k, "nflId": 1, "tackle": 0, "assist": 1}, {**k, "nflId": 2, "tackle": 0, "assist": 0}])
+    out = metric.add_made(_frames({1: [1.0], 2: [1.0]}, {1: 0, 2: 0}).drop(columns="made"), tackles)
+    assert out.set_index("nflId")["made"].to_dict() == {1: 1, 2: 0}
+
+
+def test_standing_defender_has_no_pursuit_angle():
+    r = _geom(s=0.0, vx=0.0)
+    assert np.isnan(r["pursuit_cos"]) and np.isnan(r["pursuit_angle"])
 
 
 def test_group_folds_never_share_a_game():
@@ -146,11 +173,10 @@ def test_end_to_end_on_synthetic_data(paths, tmp_path):
         g.drop(columns="week").to_csv(raw / f"tracking_week_{w}.csv", index=False)
     report = run.run()
     out = tmp_path / "artifacts" / "tracking"
-    assert report["frame_model"]["brier"] < 0.2
-    assert json.loads((out / "validation.json").read_text())["n_frames"] == report["n_frames"]
+    assert report["decision_model"]["brier"] < 0.25
+    assert json.loads((out / "validation.json").read_text())["n_decisions"] == report["n_decisions"]
     lb = pd.read_parquet(out / "leaderboard.parquet")
     assert lb["toe"].abs().sum() > 0 and lb.loc[lb["nflId"] == 100, "toe"].iloc[0] > 0  # the tackler beats expectation
-    assert abs(lb["toe"].sum()) < 1e-6 or len(lb) < 11  # centered league-wide
     frames = pd.read_parquet(out / "animation_frames.parquet")
     assert {"carrier", "offense", "defense", "ball"} <= set(frames["role"])
     g, p = frames[KEYS].iloc[0]

@@ -17,14 +17,14 @@ LAYERS = ("raw", "staging", "marts")
 
 
 class Warehouse:
-    def __init__(self, url: str | None = None):
+    def __init__(self, url: str | None = None, read_only: bool = False):
         self.url = url or cfg()["paths"]["warehouse_url"]
         if self.url.startswith("duckdb:///"):
             import duckdb
 
             file = ROOT / self.url.removeprefix("duckdb:///")
             file.parent.mkdir(parents=True, exist_ok=True)
-            self._con = duckdb.connect(str(file))
+            self._con = duckdb.connect(str(file), read_only=read_only)
             self.backend = "duckdb"
         elif self.url.startswith("postgresql"):
             from sqlalchemy import create_engine
@@ -33,8 +33,9 @@ class Warehouse:
             self.backend = "postgres"
         else:
             raise ValueError(f"Unsupported warehouse url: {self.url}")
-        for layer in LAYERS:
-            self.execute(f"CREATE SCHEMA IF NOT EXISTS {layer}")
+        if not read_only:
+            for layer in LAYERS:
+                self.execute(f"CREATE SCHEMA IF NOT EXISTS {layer}")
 
     def execute(self, sql: str) -> None:
         if self.backend == "duckdb":

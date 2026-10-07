@@ -1,9 +1,10 @@
-"""Tackles Over Expected: a frame-level tackle-opportunity model aggregated to defenders.
+"""Tackles Over Expected: a tackle-opportunity model evaluated at a pre-contact decision point per defender.
 
-For every defender-frame between the moment the ball carrier is defined (handoff / catch / run) and the end of the
-play we model P(this defender records a tackle or assist AND gets within `contact_radius` of the carrier within the
-next `frames_ahead` frames). Out-of-fold probabilities (GroupKFold by game) are collapsed to one expected-tackle value
-per defender-play, and compared with what the defender actually did.
+The decision point of a defender-play is the first frame (from handoff / catch / run on) at which the defender is within
+`opportunity_radius` of the ball carrier. Features are measured at that frame only and the label is the play outcome
+(tackle or assist), so nothing after the decision leaks into the expectation. Out-of-fold probabilities (GroupKFold by
+game) are calibrated tackle probabilities; Tackles Over Expected is actual minus expected, summed per defender.
+The same model applied to every frame gives the animation's "tackle probability if evaluated now".
 """
 
 from __future__ import annotations
@@ -40,7 +41,9 @@ def add_features(d: pd.DataFrame) -> pd.DataFrame:
     # Pursuit angle: defender heading vs. direction to where the carrier will be in `intercept_seconds`.
     wx, wy = d["cx"] + d["cvx"] * t["intercept_seconds"] - d["x"], d["cy"] + d["cvy"] * t["intercept_seconds"] - d["y"]
     norm = d["s"] * np.hypot(wx, wy)
-    d["pursuit_cos"] = np.where(norm > 1e-6, (d["vx"] * wx + d["vy"] * wy) / norm.clip(lower=1e-6), 0.0)
+    d["pursuit_cos"] = np.where(
+        norm > 1e-6, (d["vx"] * wx + d["vy"] * wy) / norm.clip(lower=1e-6), np.nan
+    )  # NaN: standing
     d["pursuit_angle"] = np.degrees(np.arccos(d["pursuit_cos"].clip(-1, 1)))
     d["carrier_speed"], d["def_speed"], d["def_accel"] = d["cs"], d["s"], d["a"]
     d["sideline_dist"] = np.minimum(d["cy"], FIELD_WIDTH - d["cy"])
@@ -58,23 +61,24 @@ def active_window(t: pd.DataFrame) -> pd.DataFrame:
     return t[keep].drop(columns=["f0", "f1"])
 
 
-def add_labels(d: pd.DataFrame, tackles: pd.DataFrame) -> pd.DataFrame:
-    """Label = defender is credited with a tackle/assist and touches the carrier within the next frames_ahead frames."""
-    t = cfg()["tracking"]
-    d = d.sort_values(KEYS + ["nflId", "frameId"]).copy()
-    by = d.groupby(KEYS + ["nflId"])["dist"]
-    future = np.full(len(d), np.nan)
-    for k in range(1, t["frames_ahead"] + 1):
-        future = np.fmin(future, by.shift(-k).to_numpy())
+def add_made(d: pd.DataFrame, tackles: pd.DataFrame) -> pd.DataFrame:
+    """Add `made`: the defender is credited with a tackle or assist on the play."""
     made = tackles[(tackles["tackle"] == 1) | (tackles["assist"] == 1)][KEYS + ["nflId"]].assign(made=1)
     d = d.merge(made, on=KEYS + ["nflId"], how="left")
     d["made"] = d["made"].fillna(0).astype(int)
-    d["label"] = ((d["made"] == 1) & (future <= t["contact_radius"])).astype(int).to_numpy()
-    return d[~np.isnan(future)]  # the last frame of a play has no future to label
+    return d
+
+
+def decision_points(frames: pd.DataFrame) -> pd.DataFrame:
+    """First frame per defender-play inside opportunity_radius; label = play outcome (`made`), never later frames."""
+    r = cfg()["tracking"]["opportunity_radius"]
+    near = frames[frames["dist"] <= r].sort_values("frameId")
+    dec = near.groupby(KEYS + ["nflId"], as_index=False).first()
+    return dec.assign(label=dec["made"])
 
 
 def defender_frames(track: pd.DataFrame, plays: pd.DataFrame, tackles: pd.DataFrame) -> pd.DataFrame:
-    """Feature + label table with one row per defender-frame, from standardized tracking."""
+    """Feature table with one row per defender-frame (plus `made`), from standardized tracking."""
     p = plays[KEYS + ["ballCarrierId", "possessionTeam", "defensiveTeam"]]
     t = active_window(track[track["nflId"].notna()].merge(p, on=KEYS))
     carrier = t[t["nflId"] == t["ballCarrierId"]]
@@ -89,7 +93,7 @@ def defender_frames(track: pd.DataFrame, plays: pd.DataFrame, tackles: pd.DataFr
     blockers = (pair["od"] < pair["dist"]).groupby([pair[k] for k in KEYS + ["frameId", "nflId"]]).sum()
     d = d.merge(blockers.rename("blockers_closer").reset_index(), on=KEYS + ["frameId", "nflId"], how="left")
     d["blockers_closer"] = d["blockers_closer"].fillna(0)
-    return add_labels(d, tackles)
+    return add_made(d, tackles)
 
 
 def group_folds(groups: pd.Series, n_splits: int | None = None):
@@ -98,34 +102,34 @@ def group_folds(groups: pd.Series, n_splits: int | None = None):
     yield from GroupKFold(n_splits=n).split(np.zeros(len(groups)), groups=groups)
 
 
-def fit_oof(df: pd.DataFrame) -> np.ndarray:
-    """Out-of-fold P(tackle soon) for every defender-frame, GroupKFold by game."""
+def fit_oof(dec: pd.DataFrame, frames: pd.DataFrame | None = None) -> tuple[np.ndarray, np.ndarray | None]:
+    """Out-of-fold P(tackle) for decision points (and for every frame of the held-out games), GroupKFold by game."""
     params = {**cfg()["tracking"]["lgbm"], "random_state": cfg()["seed"]}
-    X, y = df[FEATURES], df["label"].to_numpy()
-    oof = np.zeros(len(df))
-    for tr, te in group_folds(df["gameId"]):
+    X, y = dec[FEATURES], dec["label"].to_numpy()
+    oof = np.zeros(len(dec))
+    oof_frames = None if frames is None else np.zeros(len(frames))
+    for tr, te in group_folds(dec["gameId"]):
         model = lgb.LGBMClassifier(**params).fit(X.iloc[tr], y[tr])
         oof[te] = model.predict_proba(X.iloc[te])[:, 1]
-    return oof
+        if frames is not None:
+            held_out = frames["gameId"].isin(dec["gameId"].iloc[te]).to_numpy()
+            oof_frames[held_out] = model.predict_proba(frames.loc[held_out, FEATURES])[:, 1]
+    return oof, oof_frames
 
 
-def defender_plays(df: pd.DataFrame, tackles: pd.DataFrame) -> pd.DataFrame:
-    """One row per defender-play with an opportunity: expected vs. actual tackle, plus pursuit efficiency inputs."""
+def defender_plays(dec: pd.DataFrame, frames: pd.DataFrame, tackles: pd.DataFrame) -> pd.DataFrame:
+    """One row per defender-play opportunity: expected (decision-point probability) vs. actual, pursuit inputs."""
     r = cfg()["tracking"]["opportunity_radius"]
-    near = df["dist"] <= r
-    d = df.assign(
-        radial=np.where(near, df["def_speed"] * df["pursuit_cos"], 0.0), speed_near=np.where(near, df["def_speed"], 0.0)
+    ok = (frames["dist"] <= r) & frames["pursuit_cos"].notna()  # standing defenders have no heading
+    f = frames.assign(
+        radial=np.where(ok, frames["def_speed"] * frames["pursuit_cos"], 0.0),
+        speed_near=np.where(ok, frames["def_speed"], 0.0),
     )
-    g = d.groupby(KEYS + ["nflId"], as_index=False).agg(
-        week=("week", "first"), expected=("proba", "max"), min_dist=("dist", "min"),
-        radial=("radial", "sum"), speed_near=("speed_near", "sum"),
-    )  # fmt: skip
-    g = g[g["min_dist"] <= r]
-    t = tackles.assign(made=((tackles["tackle"] == 1) | (tackles["assist"] == 1)).astype(int))
-    t = t.rename(columns={"pffMissedTackle": "missed"})[KEYS + ["nflId", "made", "missed"]]
-    g = g.merge(t, on=KEYS + ["nflId"], how="left").fillna({"made": 0, "missed": 0})
-    # ponytail: the peak frame probability is not a calibrated play-level probability; rescale so league TOE sums to 0.
-    g["expected"] *= g["made"].sum() / g["expected"].sum()
+    pursuit = f.groupby(KEYS + ["nflId"], as_index=False)[["radial", "speed_near"]].sum()
+    g = dec[KEYS + ["nflId", "week", "proba", "made"]].rename(columns={"proba": "expected"})
+    g = g.merge(pursuit, on=KEYS + ["nflId"], how="left")
+    missed = tackles.rename(columns={"pffMissedTackle": "missed"})[KEYS + ["nflId", "missed"]]
+    g = g.merge(missed, on=KEYS + ["nflId"], how="left").fillna({"missed": 0})
     return g.assign(toe=g["made"] - g["expected"])
 
 

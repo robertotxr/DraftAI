@@ -13,18 +13,19 @@ https://www.kaggle.com/competitions/nfl-big-data-bowl-2024/rules. Then download 
 
 - Standardize: flip left-moving plays so offense always goes left to right.
 - Window: frames from handoff / catch / run until tackle, out of bounds, touchdown or fumble.
-- Frame model (LightGBM, GroupKFold by game): P(defender gets a tackle or assist and touches the carrier within
-  `frames_ahead` frames). Features: distance, closing speed, relative speed, pursuit angle (heading vs. the carrier
-  position projected `intercept_seconds` ahead), carrier speed, defender speed and acceleration, blockers closer to the
-  carrier than the defender, carrier distance to sideline.
-- Expected tackle per defender-play = peak frame probability, among plays where the defender got within
-  `opportunity_radius` of the carrier, rescaled so league-wide expected equals actual.
+- Decision point: per defender-play, the first frame inside `opportunity_radius` of the carrier (or the first window
+  frame if already inside). Defenders who never get that close are not opportunities.
+- Model (LightGBM, GroupKFold by game) trained on decision-point rows only: features as of that frame (distance,
+  closing speed, relative speed, pursuit angle vs. the carrier position projected `intercept_seconds` ahead, carrier
+  speed, defender speed and acceleration, blockers closer to the carrier, distance to sideline), label = tackle or
+  assist on the play. Nothing after the decision enters the features, and expected is a calibrated out-of-fold probability.
+- The same model applied to every frame is the animation's "tackle probability if evaluated now".
 - Tackles Over Expected (TOE) = tackles + assists minus expected, per player. Reported per 100 opportunities.
 - Pursuit angle efficiency = share of defender speed aimed at the projected intercept point, while near the carrier.
 
 ## Validation plan
 
-- Calibration of the frame model on held-out games (Brier, ECE, reliability plot).
+- Calibration of the decision-point model on held-out games (Brier, ECE, reliability plot).
 - Stability: TOE per 100 in odd weeks vs. even weeks, per player (Pearson and Spearman-Brown).
 - Validity: TOE per 100 vs. PFF missed-tackle rate (expected negative).
 - Figures go to `reports/figures/tracking_*.png`, numbers to `artifacts/tracking/validation.json`.
