@@ -125,31 +125,45 @@ def draft_text(row: pd.Series) -> str:
     return f"Round {int(row['round'])}, pick {int(row['pick'])} ({row['team']})"
 
 
-INK = "#1f2430"
+INK, SUB, LINE, BG, SURFACE = "#18181b", "#71717a", "#e4e4e0", "#f8f8f7", "#f1f1ef"
+FONT = "Geist, system-ui, sans-serif"
 CSS = f"""
 <style>
-.block-container {{padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1200px;}}
-header[data-testid="stHeader"] {{background: transparent;}}
-h1, h2, h3 {{color: {INK}; letter-spacing: -0.01em;}}
-h1 {{font-weight: 750 !important;}}
-div[data-testid="stVerticalBlockBorderWrapper"] {{border-radius: 14px; border-color: #e6e4de; background: #fbfaf8;}}
-div[data-testid="stMetric"] {{background: #fbfaf8; border: 1px solid #e6e4de; border-radius: 14px; padding: 14px 18px;}}
-div[data-testid="stMetricLabel"] p {{font-size: 0.8rem; color: #6b6963; font-weight: 500;}}
-div[data-testid="stMetricValue"] {{font-weight: 700; color: {INK};}}
-.sub {{color: #6b6963; font-size: 1.05rem; margin: -0.4rem 0 1.4rem;}}
+:root {{--ink: {INK}; --sub: {SUB}; --line: {LINE}; --accent: {MODEL}; --r-card: 12px; --r-input: 8px;}}
+header[data-testid="stHeader"] {{background: transparent; height: 0;}}
+[data-testid="stDecoration"], [data-testid="stToolbar"], #MainMenu, footer {{display: none !important;}}
+.block-container {{padding-top: 2.4rem; padding-bottom: 3.5rem; max-width: 1180px;}}
+h1, h2, h3 {{color: var(--ink); letter-spacing: -0.02em;}}
+h1 {{font-weight: 650 !important; font-size: 2.2rem !important;}}
+h2, h3 {{font-weight: 600 !important;}}
+a {{color: var(--accent);}}
+div[data-testid="stVerticalBlockBorderWrapper"] {{border-radius: var(--r-card); border-color: var(--line);
+  background: {SURFACE};}}
+div[data-testid="stExpander"] details {{border-radius: var(--r-card); border-color: var(--line); background: transparent;}}
+div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {{border-radius: var(--r-input);}}
+div[data-testid="stDataFrame"] {{border-radius: var(--r-card); overflow: hidden; border: 1px solid var(--line);}}
+div[data-testid="stAlert"] {{border-radius: var(--r-card);}}
+.stButton button, a[data-testid="stPageLink-NavLink"] {{border-radius: 999px;}}
 div[data-testid="stHorizontalBlock"] {{flex-wrap: wrap; row-gap: 0.75rem;}}
-div[data-testid="stColumn"] {{min-width: 200px;}}
-.kpi {{margin-bottom: 8px;}}
-.hero {{padding: 8px 0 4px;}}
-.hero h1 {{font-size: 3.2rem; margin: 0; line-height: 1.05;}}
-.hero p {{font-size: 1.25rem; color: #4a4843; margin: 0.5rem 0 0; max-width: 46rem;}}
-.kpi {{background: #fbfaf8; border: 1px solid #e6e4de; border-radius: 14px; padding: 18px 20px; min-height: 172px;}}
-.kpi .v {{font-size: 2.3rem; word-break: keep-all; font-weight: 750; line-height: 1.1;}}
-.kpi .l {{font-size: 0.92rem; font-weight: 600; color: {INK}; margin-top: 4px;}}
-.kpi .s {{font-size: 0.8rem; color: #6b6963; margin-top: 2px;}}
-.chip {{display: inline-block; padding: 2px 10px; border-radius: 99px; background: #eef3fb; color: {MODEL};
-  font-size: 0.8rem; font-weight: 600; margin-right: 6px;}}
-.pname {{font-size: 2.2rem; font-weight: 750; color: {INK}; line-height: 1.1;}}
+div[data-testid="stColumn"] {{min-width: 180px;}}
+@media (max-width: 999px) {{div[data-testid="stColumn"] {{min-width: 280px;}}}}
+@media (min-width: 1000px) {{div[data-testid="stHorizontalBlock"] {{flex-wrap: nowrap;}} div[data-testid="stColumn"] {{min-width: 0;}}}}
+.sub {{color: var(--sub); font-size: 1.05rem; margin: -0.3rem 0 1.4rem; max-width: 44rem;}}
+.hero h1 {{font-size: 2.5rem !important; line-height: 1.08; margin: 0; letter-spacing: -0.03em; padding: 0;}}
+.hero h1 em {{font-style: normal; color: var(--accent);}}
+.hero p {{font-size: 1.12rem; color: var(--sub); margin: 0.9rem 0 1.2rem; max-width: 26rem;}}
+.stat {{border-top: 1px solid var(--line); padding: 12px 4px 4px 0;}}
+.stat .v {{font-size: 1.9rem; font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; color: var(--ink);}}
+.stat.big .v {{font-size: 3.2rem; color: var(--accent);}}
+.stat .l {{font-size: 0.9rem; font-weight: 500; color: var(--ink); margin-top: 4px;}}
+.stat .s {{font-size: 0.82rem; color: var(--sub); margin-top: 2px;}}
+.chip {{display: inline-block; padding: 3px 11px; border-radius: 999px; background: #e9f0fb; color: #1f5fb0;
+  font-size: 0.8rem; font-weight: 550; margin: 0 6px 6px 0;}}
+.pname {{font-size: 2.3rem; font-weight: 650; letter-spacing: -0.03em; color: var(--ink); line-height: 1.1;
+  margin-bottom: 8px;}}
+.eyebrow {{font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 10px;}}
+.nav a {{text-decoration: none;}}
 </style>
 """
 
@@ -162,23 +176,38 @@ def setup(title: str, icon: str, subtitle: str = "") -> None:
         st.markdown(f'<div class="sub">{subtitle}</div>', unsafe_allow_html=True)
 
 
-def kpi(value: str, label: str, sub: str = "", color: str = MODEL) -> None:
-    """Big-number card."""
+def kpi(value: str, label: str, sub: str = "", big: bool = False) -> None:
+    """Plain stat block: ink number, hairline on top. big = the one headline stat, in the accent."""
     st.markdown(
-        f'<div class="kpi"><div class="v" style="color:{color}">{value}</div><div class="l">{label}</div>'
+        f'<div class="stat{" big" if big else ""}"><div class="v">{value}</div><div class="l">{label}</div>'
         f'<div class="s">{sub}</div></div>',
         unsafe_allow_html=True,
     )
 
 
 def style_fig(fig, height: int = 300, **layout):
-    """Consistent clean Plotly look."""
+    """Consistent clean Plotly look: transparent, light grid, Geist."""
     layout.setdefault("margin", dict(l=10, r=10, t=30, b=10))
-    fig.update_layout(height=height, plot_bgcolor="white", paper_bgcolor="white", font=dict(color=INK, size=13),
+    layout.setdefault("title_font", dict(size=14, color=INK))
+    fig.update_layout(height=height, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                      font=dict(family=FONT, color=INK, size=13), hoverlabel=dict(font_family=FONT),
                       **layout)  # fmt: skip
-    fig.update_xaxes(gridcolor="#eceae5", zeroline=False, linecolor="#d8d6d0")
-    fig.update_yaxes(gridcolor="#eceae5", zeroline=False, linecolor="#d8d6d0")
+    fig.update_xaxes(gridcolor="#ebebe8", zeroline=False, linecolor=LINE, tickfont=dict(color=SUB))
+    fig.update_yaxes(gridcolor="#ebebe8", zeroline=False, linecolor="rgba(0,0,0,0)", tickfont=dict(color=SUB))
     return fig
+
+
+@st.cache_data(show_spinner=False)
+def sleeper_stats() -> dict | None:
+    """Rounds 4-7, out-of-sample classes: starter rate for the model's top 10% of the class vs the rest."""
+    b = load_board()
+    o = b[(b["prediction_type"] != "in_sample") & (b["undrafted"] == 0) & (b["round"] >= 4) & b["starter"].notna()]
+    if o.empty:
+        return None
+    top = o.groupby("draft_year")["p_starter"].rank(pct=True) >= 0.9
+    if top.sum() == 0 or (~top).sum() == 0:
+        return None
+    return {"top": o.loc[top, "starter"].mean(), "rest": o.loc[~top, "starter"].mean(), "n_top": int(top.sum())}
 
 
 def delta_text(v) -> str:

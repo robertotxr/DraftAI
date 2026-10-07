@@ -1,6 +1,6 @@
 # DraftAI
 
-**A second opinion on every NFL draft pick: who will become a starter, and when the draft board is probably wrong.**
+**Who's going to start in the NFL? And when is the draft board wrong?**
 
 ![DraftAI home](docs/home.png)
 
@@ -8,21 +8,21 @@
 
 ## What it does
 
-- **Rates every prospect** drafted since 2013, plus undrafted combine invitees. Each one gets a probability of becoming a starter and a likely range of playing time.
-- **Flags disagreements with the board.** It shows where the model likes a player more or less than his draft slot implies.
-- **Finds historical comps**: similar past prospects and how their careers actually went.
-- **Measures coverage from tracking data**: how much ground a defender makes up while the ball is in the air.
+- **Grades every prospect.** Every pick since 2013, plus undrafted combine guys. Each one gets a shot at becoming a starter.
+- **Calls out the board.** It shows who the model likes more than his draft slot. And who it likes less.
+- **Finds comps.** Similar players from past drafts, and how they actually turned out.
+- **Reads tracking data.** Which defenders close on the ball faster than they should.
 
-## Results at a glance
+## The scoreboard
 
-All numbers come from draft classes the model had never seen. Each class was scored using only what was known on its draft night.
+Every number below comes from drafts the model never saw. It only knew what teams knew on draft night.
 
 | | |
 |---|---|
-| **63%** | of the model's 40 biggest upgrades became starters. Their draft slot implied 52%. |
-| **5 of 6** | undrafted players who became starters since 2017 were in the model's top 16% of their class. |
-| **0.833** | AUC for picking starters, vs. 0.828 for draft slot alone. The market is hard to beat; the edge is in the disagreements. |
-| **83%** | of outcomes landed inside the model's 80% range: honest uncertainty, not false precision. |
+| **63%** | The model's 40 favorite value picks became starters 63% of the time. Their draft slot said 52%. |
+| **5 of 6** | Undrafted guys who became starters since 2017. Five were in the model's top 16%. |
+| **0.833** | Ranking accuracy (AUC). Draft slot alone gets 0.828. Close. The edge is in the disagreements. |
+| **83%** | Outcomes that landed inside the model's 80% range. It knows what it doesn't know. |
 
 ![When the model disagreed with the draft slot](reports/figures/disagreement.png)
 
@@ -31,23 +31,23 @@ All numbers come from draft classes the model had never seen. Each class was sco
 | Big Board | Player Card |
 |---|---|
 | ![Big Board](docs/big_board.png) | ![Player Card](docs/player_card.png) |
-| Every class ranked by chance to start, next to what the slot implies. | Athletic profile, college production, what drives the prediction, comps. |
+| Every class, ranked by chance to start. Next to what the slot says. | Testing, college stats, what's driving the grade, comps. |
 
 | Tracking | |
 |---|---|
-| ![Closing Over Expected](docs/tracking.png) | **Closing Over Expected.** 2023 NFL tracking data shows which defenders close on the receiver faster than expected while the ball is in the air. When the nearest defender is in the top fifth, 60% of passes are completed, against 72% in the bottom fifth. |
+| ![Closing Over Expected](docs/tracking.png) | **Closing Over Expected.** 2023 tracking data. Who closes on the receiver faster than expected while the ball is in the air? It matters. When the nearest defender closes best, 60% of passes get caught. When he closes worst, 72%. |
 
 ## How it works
 
-1. **Collect.** NFL draft, combine and snap counts (nflverse), plus college stats (CollegeFootballData), all cached locally.
-2. **Profile.** Size-adjusted athletic scores, plus college production adjusted for opponent strength and age.
-3. **Predict.** Calibrated models trained only on past classes, blended with the draft slot, with an 80% outcome range.
-4. **Compare.** Five nearest historical comps with known outcomes.
-5. **Track.** A ball-in-air coverage metric from Big Data Bowl player tracking.
+1. **Collect.** Draft, combine and snap counts from nflverse. College stats from CollegeFootballData. All cached.
+2. **Profile.** Athletic scores adjusted for size. College production adjusted for opponents and age.
+3. **Predict.** Models trained only on past drafts. Blended with the draft slot. Plus an 80% range.
+4. **Compare.** The five closest comps, with real outcomes.
+5. **Track.** A coverage stat built from Big Data Bowl player tracking.
 
-**Read the story:** [The 2023 draft, three years later](reports/draft_2023.md), a one-page look at which calls held up.
+**Read the story:** [The 2023 draft, three years later](reports/draft_2023.md). One page. Hits, misses, and Puka Nacua.
 
-The full backtest is in [reports/backtest_2021_2023.md](reports/backtest_2021_2023.md), and the technical detail is in [docs/methodology.md](docs/methodology.md).
+Want the deep dive? Here's the [full backtest](reports/backtest_2021_2023.md) and the [methodology](docs/methodology.md).
 
 ## Run it
 
@@ -60,7 +60,7 @@ make app               # open the app at localhost:8501
 
 ## Honest limits
 
-- Playing time favors high picks, because teams play the players they invested in. That makes the draft slot a tough baseline.
-- No pro-day results, medicals, interviews or route data. That is where scouts still add the most.
-- College defensive stats start in 2016, and offensive linemen have no production stats.
-- The tracking metric covers one NFL season.
+- Teams play the guys they drafted high. So playing time favors early picks. That makes the slot tough to beat.
+- No pro days, medicals, interviews or route data. That's where scouts still win.
+- College defensive stats start in 2016. Offensive linemen have no stats at all.
+- Tracking covers one NFL season.

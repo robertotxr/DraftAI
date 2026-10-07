@@ -1,10 +1,14 @@
 [theme]
 base = "light"
 primaryColor = "#2a78d6"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f6f5f2"
-textColor = "#1f2430"
-font = "sans serif"
+backgroundColor = "#f8f8f7"
+secondaryBackgroundColor = "#f0f0ee"
+textColor = "#18181b"
+font = "Geist:https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap"
+headingFont = "Geist:https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&display=swap"
+codeFont = "Geist Mono:https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap"
+baseRadius = "0.75rem"
+borderColor = "#e4e4e0"
 
 [client]
 toolbarMode = "viewer"
