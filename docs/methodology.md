@@ -89,3 +89,12 @@ The warehouse has three layers. `raw.*` holds the source payloads, `staging.*` h
 - CFBD usage is logged to `data/raw/cfbd/_call_log.csv` from the `X-CallLimit-Remaining` header. A full build uses about 66 calls of the 1,000/month free tier, and the client refuses to call when fewer than 50 remain.
 - Settings live in [config/config.yaml](../config/config.yaml): paths, seasons, thresholds, model parameters, seed.
 
+
+## Tried and dropped: games played
+
+Puka Nacua's last college season was cut short. Season totals made him look ordinary.
+So we pulled every college box score (2012-2025) and rebuilt production per game actually played.
+
+It caught Nacua's injury (9 of 13 games). But the model barely moved him: 10% before, 10% after.
+Overall it got slightly worse (blend Brier 0.1283 to 0.1285, AUC 0.833 to 0.833, undrafted AUC 0.76 to 0.74).
+So we dropped it. Simpler model, same answers.

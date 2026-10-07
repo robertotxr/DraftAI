@@ -43,7 +43,7 @@ Pick 177 became one of the best receivers in football. The model missed him too:
 - He did no drills at the combine, and pro-day results are not in the public data.
 - His final college season was cut short by injury, so his last-year production looked ordinary.
 
-That is the blind spot in one player. When the data is thin, the model falls back on the slot, and the slot was wrong. Among 2023's late-round receivers, the model still ranked him 4th of 16 against his slot.
+We tried a fix: production per game actually played, from every college box score. It saw the injury. It didn't move him. That is the blind spot in one player. When the data is thin, the model falls back on the slot, and the slot was wrong. Among 2023's late-round receivers, the model still ranked him 4th of 16 against his slot.
 
 ## The undrafted find
 
