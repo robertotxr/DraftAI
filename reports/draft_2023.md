@@ -35,6 +35,16 @@ Branch is the clearest case. He was the 45th pick with a coin-flip slot outlook.
 
 The misses have a pattern. Rotational edge players like Van Ness can be useful without clearing a 50% snap share. Mid-round players who earned the job, like Stevenson and Tucker, often did it for reasons public data cannot see: scheme fit, development and opportunity.
 
+## The one everybody missed: Puka Nacua
+
+Pick 177 became one of the best receivers in football. The model missed him too: it gave him **10%**, the same as his slot.
+
+- His strongest signal was there: a receiving breakout at 19, the biggest positive in his profile.
+- He did no drills at the combine, and pro-day results are not in the public data.
+- His final college season was cut short by injury, so his last-year production looked ordinary.
+
+That is the blind spot in one player. When the data is thin, the model falls back on the slot, and the slot was wrong. Among 2023's late-round receivers, the model still ranked him 4th of 16 against his slot.
+
 ## The undrafted find
 
 Ronnie Hickman (Ohio State) went undrafted. Among that year's undrafted combine invitees, the model ranked him in its **top 12%**. He averaged 55% of his team's defensive snaps over three years, and 95% by 2025.
