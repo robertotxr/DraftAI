@@ -23,7 +23,7 @@ st.subheader("How likely is a drafted player to become a starter, and what does 
 
 st.markdown(
     """
-For every player drafted 2013-2026, DraftAI estimates the chance he plays at least half of his team's
+For every player drafted 2013-2026, plus the combine invitees who went undrafted, DraftAI estimates the chance he plays at least half of his team's
 snaps, on average, over his first three NFL seasons (our definition of a **starter**). It then asks the
 question front offices care about: **how much does that estimate differ from what the draft slot alone implies?**
 """
@@ -85,8 +85,8 @@ with right:
         unsafe_allow_html=True,
     )
 
-n26 = int((board["draft_year"] == board["draft_year"].max()).sum())
+n_udfa = int(board["undrafted"].sum())
 st.caption(
-    f"{len(board):,} drafted players, classes {board['draft_year'].min()}-{board['draft_year'].max()} "
-    f"({n26} in the latest class). Outcomes for the latest classes are still being observed."
+    f"{len(board) - n_udfa:,} drafted players and {n_udfa:,} undrafted combine invitees, classes "
+    f"{board['draft_year'].min()}-{board['draft_year'].max()}. Outcomes for the latest classes are still being observed."
 )

@@ -26,7 +26,7 @@ PRODUCTION = (
 )  # fmt: skip
 
 CONTEXT = ["draft_age", "power_conf"]
-MARKET = ["log_pick"]
+MARKET = ["log_pick", "undrafted"]  # undrafted players get log_pick of the slot just past the draft
 
 FEATURE_SETS = {
     "pick_only": MARKET,

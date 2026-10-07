@@ -2,20 +2,21 @@
 
 An end-to-end prospect evaluation system: data ingestion → athletic and production features → calibrated outcome models → historical comps → a tracking-data tackling metric → an interactive big board.
 
-**Headline result (2020–2023 held-out classes, scored as of draft night).** A market + model blend predicts which picks become starters slightly better than draft slot alone: Brier 0.1284 vs. 0.1294, AUC 0.833 vs. 0.828. The 95% CI on that gain includes zero, so the honest claim is "matches the market and adds a small edge." The model's disagreements with the slot carry signal. Its 40 biggest upgrades in 2021–2023 had a 52% slot-implied starter rate, and 68% became starters. Full write-up: [reports/backtest_2021_2023.md](reports/backtest_2021_2023.md).
+**Headline result (2020–2023 held-out classes, scored as of draft night).** A market + model blend predicts which picks become starters slightly better than draft slot alone: Brier 0.1283 vs. 0.1294, AUC 0.833 vs. 0.828. The 95% CI on that gain includes zero, so the honest claim is "matches the market and adds a small edge." The model's upgrades carry signal. Its 40 biggest upgrades in 2021–2023 had a 52% slot-implied starter rate, and 63% became starters. Its downgrades work in aggregate but not at the extreme. Full write-up: [reports/backtest_2021_2023.md](reports/backtest_2021_2023.md).
 
 ![Big board](docs/big_board.png)
 
 | Held-out classes 2020–2023 (n = 1,014) | Brier ↓ | Skill vs. base rate ↑ | AUC ↑ | ECE ↓ |
 |---|---|---|---|---|
 | Draft slot only (baseline) | 0.1294 | 0.271 | 0.828 | 0.036 |
-| Athleticism only (baseline) | 0.1664 | 0.063 | 0.679 | 0.036 |
-| Scouting profile, no slot | 0.1575 | 0.113 | 0.721 | 0.024 |
-| Full model, single (with position interactions) | 0.1298 | 0.269 | 0.824 | 0.019 |
-| Full model, one per position group | 0.1379 | 0.223 | 0.797 | 0.033 |
-| **Market + model blend (production)** | **0.1284** | **0.277** | **0.833** | 0.044 |
+| Athleticism only (baseline) | 0.1683 | 0.052 | 0.664 | 0.038 |
+| Scouting profile, no slot | 0.1578 | 0.111 | 0.721 | 0.029 |
+| Full model, single (with position interactions) | 0.1301 | 0.267 | 0.824 | 0.025 |
+| Full model, one per position group | 0.1377 | 0.224 | 0.798 | 0.036 |
+| **Market + model blend (production)** | **0.1283** | **0.277** | **0.833** | 0.042 |
 
-The 80% conformal intervals for three-year snap share achieved 86% coverage.
+- The 80% cross-conformal intervals for three-year snap share covered 83% of outcomes (82–87% in each draft-capital stratum).
+- Undrafted combine invitees are scored too (822 labeled in 2017–2023). Only 6 became starters. Five of the six ranked in the top 16% of their class's undrafted invitees by out-of-sample model probability.
 
 ## Reproduce
 
@@ -27,7 +28,7 @@ make test lint
 make app                   # streamlit big board at localhost:8501
 ```
 
-- `make bdb` downloads the Big Data Bowl 2024 data. Kaggle returns 403 until you accept the [competition rules](https://www.kaggle.com/competitions/nfl-big-data-bowl-2024/rules). Until then the tracking step logs a warning and the app shows a notice.
+- `make bdb` downloads the Big Data Bowl 2024 data. The competition's files were taken down in August 2025 (only a README remains), so the download fails and the tracking step logs a warning. Anyone with a local copy can drop the CSVs into `data/raw/bdb/` and run `make tracking`.
 - The pipeline is idempotent and cached. nflverse pulls are stored as parquet and every CFBD response as JSON under `data/raw/`, so a rerun makes zero API calls.
 - CFBD usage is logged to `data/raw/cfbd/_call_log.csv` from the `X-CallLimit-Remaining` header. A full build uses about 66 calls of the 1,000/month free tier, and the client refuses to call when fewer than 50 remain.
 - Settings live in [config/config.yaml](config/config.yaml): paths, seasons, thresholds, model parameters, seed.
@@ -66,7 +67,9 @@ The warehouse has three layers. `raw.*` holds the source payloads, `staging.*` h
 - Athleticism only, scouting profile (no slot) and full profile + slot: LightGBM with sigmoid calibration on internal CV folds of the training classes.
 - Each LightGBM setup is fit two ways, one model per position group vs. a single model with a position feature. The single model wins because per-group samples are too small.
 - The production model is a stacked logistic blend of the slot and full-model log-odds, fitted on earlier out-of-sample predictions only.
-- Intervals use conformalized quantile regression. SHAP values come from a LightGBM fitted on all labeled classes.
+- The classifiers learn from drafted players only. Mixing in the ~1%-starter undrafted rows distorted their calibration on drafted players. The blend carries an undrafted indicator, fitted on earlier out-of-sample predictions, which sets the probability level for undrafted invitees.
+- Intervals use cross-conformal quantile regression. Leave-classes-out residuals within the training classes set the widening, separately for round 1, rounds 2–3, rounds 4–7 and undrafted players. An earlier version calibrated on residuals of earlier walk-forward models, which were trained on far fewer classes, and over-covered (86%).
+- SHAP values come from a LightGBM fitted on all labeled drafted classes.
 
 **Features.**
 - *Athletic* ([athletic.py](src/features/athletic.py)): RAS-style 0–10 percentiles within position group for 40, vertical, broad, 3-cone, shuttle and bench. Each drill is size-adjusted by regressing it on height and weight. Missing drills stay missing, with explicit `_measured` flags. No composite is produced from fewer than 3 drills. The public combine data has no 10-yard split, so it is not used.
@@ -82,6 +85,7 @@ The warehouse has three layers. `raw.*` holds the source payloads, `staging.*` h
   - An nflverse pick (class, overall pick) joins the CFBD draft table, which carries the CFBD college athlete ID. The ID is accepted only if the names agree. Otherwise the code falls back to normalized name + school.
   - Results: 2,832 ID matches, 77 name-based matches, 5 ambiguous cases left unmatched on purpose, and 612 unmatched.
   - Match rate is 82.5% of picks overall and 91% excluding offensive linemen, who have no box-score stats.
+  - Undrafted combine invitees go through the name + school path (80.5% matched). When the combine feed lacks their PFR id (needed for NFL snaps), it is recovered from rosters. Roster birth dates are dropped for them: a birth date only exists if the player later made a roster, which is post-draft information.
 
 **Comps.** NaN-aware kNN on standardized, position-specific profiles (body + athletic + production). Comps for class Y come only from classes whose outcome was known by then, so every comp shows a real result.
 
@@ -89,15 +93,15 @@ The warehouse has three layers. `raw.*` holds the source payloads, `staging.*` h
 
 ## Known limitations
 
-- Drafted players only. UDFAs have no slot baseline.
+- Undrafted players are covered only if they were invited to the combine. With 6 undrafted starters in seven classes, their probabilities are rough and they have no slot baseline.
 - CFBD defensive season stats begin in 2016, so defensive production is missing for most early training classes. Offensive linemen have no production stats.
 - No pro-day data, 10-yard splits, route or target data (YPRR), medicals or interviews.
-- The market + model gain is not statistically significant on four held-out classes. The blend is slightly less calibrated (ECE 0.044) than the full model (0.019).
-- The tracking metric is implemented and unit-tested on synthetic plays, but it has not been run on the real BDB data until the Kaggle rules are accepted.
+- The market + model gain is not statistically significant on four held-out classes. The blend is slightly less calibrated (ECE 0.042) than the full model (0.025).
+- The tracking metric is implemented and unit-tested on synthetic plays, but has not run on real data. In August 2025 the NFL replaced the BDB 2024 files on Kaggle with a README, so the tackling data is no longer downloadable.
 
 ## Next steps
 
-1. Accept the BDB rules, run `make bdb tracking`, then link TOE to college defenders who later appear in the tracking data.
+1. Port the tracking metric to data that is still published (Big Data Bowl 2026: 2023 pass plays, ball-in-air closing speed), then link it to college defenders.
 2. Add pro-day results and PFF-style charting data (targets, routes, pressures) when a licensed source is available.
-3. Model second-contract or AV-per-season outcomes once enough seasons accumulate. Add UDFAs with a "pick 260+" slot proxy.
-4. Use a cross-conformal calibration set to tighten intervals toward nominal coverage.
+3. Model second-contract or AV-per-season outcomes once enough seasons accumulate.
+4. Extend undrafted coverage beyond combine invitees (pro-day-only prospects).

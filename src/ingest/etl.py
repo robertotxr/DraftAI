@@ -14,6 +14,7 @@ import pandas as pd
 
 from src.config import cfg, position_group
 from src.db import Warehouse
+from src.features.athletic import combine_group
 from src.ingest import cfbd_client, identity, nflverse
 
 log = logging.getLogger(__name__)
@@ -130,17 +131,71 @@ def stage_draft_picks(wh: Warehouse) -> pd.DataFrame:
         }
     )
     p["player_key"] = p["draft_year"].astype(str) + "-" + p["pick"].astype(str)
+    p["undrafted"] = 0
+    p["combine_key"] = p["pfr_player_id"]
     return p
 
 
+def stage_undrafted(combine: pd.DataFrame, picks: pd.DataFrame) -> pd.DataFrame:
+    """Combine invitees who went undrafted, shaped like the draft picks (no round, pick or team).
+
+    nflverse leaves `draft_ovr` empty for some drafted players too, so anyone who matches a pick by PFR id
+    or by normalized name + year is dropped.
+    """
+    y = cfg()["years"]
+    c = combine[combine["draft_ovr"].isna() & combine["combine_year"].between(y["draft_first"], y["draft_last"])].copy()
+    c["pos_group"] = c["combine_pos"].map(combine_group)
+    c = c[c["pos_group"].notna()]
+    name_key = c["player_name"].map(identity.norm_name)
+    drafted = set(zip(picks["player_name"].map(identity.norm_name), picks["draft_year"]))
+    was_drafted = [k in drafted for k in zip(name_key, c["combine_year"])]
+    c = c[~c["pfr_id"].isin(picks["pfr_player_id"].dropna()) & ~np.array(was_drafted)]
+    out = pd.DataFrame(
+        {
+            "draft_year": c["combine_year"],
+            "round": np.nan,
+            "pick": np.nan,
+            "pfr_player_id": c["pfr_id"],
+            "cfb_player_id": c["cfb_id"],
+            "player_name": c["player_name"],
+            "position": c["combine_pos"],
+            "pos_group": c["pos_group"],
+            "college": c["school"],
+            "combine_key": c["combine_key"],
+            "undrafted": 1,
+        }
+    )
+    out["player_key"] = out["draft_year"].astype(str) + "-UDFA-" + out["combine_key"].str.replace(" ", "_")
+    return out.drop_duplicates("player_key")
+
+
 def stage_combine(wh: Warehouse) -> pd.DataFrame:
+    """Combine results with a stable `combine_key`: the PFR id, else name|year|school.
+
+    Undrafted players often lack a PFR id in the combine feed. It is recovered from rosters (same
+    normalized name, entry year = combine year or the next, a single candidate) so their NFL snaps can be found.
+    """
     c = wh.table("raw.nfl_combine")
     c["ht_in"] = height_inches(c["ht"])
     c = c.rename(columns={"season": "combine_year", "pos": "combine_pos", "wt": "wt_lb"})
+    r = wh.table("raw.nfl_rosters").dropna(subset=["pfr_id", "entry_year"])
+    r = r.assign(name_key=r["player_name"].map(identity.norm_name))
+    r = r.groupby(["name_key", "entry_year"])["pfr_id"].agg(["first", "nunique"])
+    roster_ids = r[r["nunique"] == 1]["first"].to_dict()  # two rookies with the same name: don't guess
+    keys = zip(c["player_name"].map(identity.norm_name), c["combine_year"])
+    # Undrafted players sometimes sign after the combine year's season starts: also try the following entry year.
+    found = [roster_ids.get((n, y), roster_ids.get((n, y + 1))) for n, y in keys]
+    c["pfr_id"] = c["pfr_id"].fillna(pd.Series(found, index=c.index))
+    c["combine_key"] = c["pfr_id"].fillna(
+        c["player_name"] + "|" + c["combine_year"].astype(str) + "|" + c["school"].fillna("")
+    )
     return c[
         [
             "combine_year",
             "pfr_id",
+            "combine_key",
+            "cfb_id",
+            "draft_ovr",
             "player_name",
             "combine_pos",
             "school",
@@ -279,11 +334,13 @@ def stage_birth_dates(wh: Warehouse) -> pd.DataFrame:
 
 
 def build_staging(wh: Warehouse) -> None:
-    picks = stage_draft_picks(wh)
+    drafted, combine = stage_draft_picks(wh), stage_combine(wh)
+    # staging.draft_picks holds every prospect: drafted players plus undrafted combine invitees.
+    picks = pd.concat([drafted, stage_undrafted(combine, drafted)], ignore_index=True)
     players = stage_college_player_seasons(wh)
     tables = {
         "draft_picks": picks,
-        "combine": stage_combine(wh),
+        "combine": combine,
         "nfl_snap_shares": stage_nfl_snap_shares(wh),
         "college_player_seasons": players,
         "college_team_seasons": stage_team_seasons(wh, players),
@@ -291,23 +348,19 @@ def build_staging(wh: Warehouse) -> None:
         "birth_dates": stage_birth_dates(wh),
     }
     stat_players = players[["player_id", "player", "team", "season"]]
-    raw_picks = wh.table("raw.nfl_draft_picks")
-    raw_picks = raw_picks[
-        raw_picks["position"].map(position_group).notna() & (raw_picks["season"] >= cfg()["years"]["draft_first"])
-    ]
-    ident = identity.resolve(raw_picks, wh.table("raw.cfbd_draft_picks"), stat_players)
+    ident = identity.resolve(
+        picks[
+            ["player_key", "draft_year", "pick", "pfr_player_id", "player_name", "college", "pos_group", "undrafted"]
+        ].rename(columns={"draft_year": "season", "player_name": "pfr_player_name"}),
+        wh.table("raw.cfbd_draft_picks"),
+        stat_players,
+    )
     tables["player_identity"] = ident
     for name, df in tables.items():
         wh.write(f"staging.{name}", df)
         log.info("staging.%s: %d rows", name, len(df))
-    rate = (
-        ident.assign(m=ident.match_method != "unmatched")
-        .groupby(
-            picks.set_index(["draft_year", "pick"])["pos_group"].reindex(list(zip(ident.season, ident.pick))).values
-        )["college_player_id"]
-        .apply(lambda x: x.notna().mean())
-    )
-    log.info("college match rate by position group:\n%s", rate.round(3).to_string())
+    rate = ident.groupby(["undrafted", "pos_group"])["college_player_id"].apply(lambda x: x.notna().mean())
+    log.info("college match rate (undrafted, position group):\n%s", rate.round(3).unstack(0).to_string())
 
 
 def run() -> None:

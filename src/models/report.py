@@ -22,10 +22,31 @@ def load() -> pd.DataFrame:
     wh = Warehouse(read_only=True)
     pred = wh.table("marts.predictions")
     pros = wh.table("marts.prospects")[["player_key", "player_name", "position", "pick", "round", "team", "college",
-                                         "snap_share_3yr", "starter"]]  # fmt: skip
+                                         "snap_share_3yr", "starter", "undrafted"]]  # fmt: skip
     wh.close()
     df = pred.merge(pros, on="player_key")
-    return df[df["draft_year"].isin(CLASSES) & df["starter"].notna() & (df["prediction_type"] == "walk_forward")]
+    return df[df["starter"].notna() & (df["prediction_type"] == "walk_forward")]
+
+
+def undrafted(base_model: str) -> dict:
+    """Undrafted starters and where the model ranked them among their class's undrafted invitees.
+
+    Ranked by the out-of-sample base model: the blend for 2017-2019 is fitted in sample.
+    """
+    wh = Warehouse(read_only=True)
+    u = wh.table("marts.backtest")
+    wh.close()
+    u = u[(u["undrafted"] == 1) & u["starter"].notna()].copy()
+    u["p_starter"] = u[f"p_{base_model}"]
+    u["model_pct_rank"] = u.groupby("draft_year")["p_starter"].rank(pct=True)
+    cols = ["draft_year", "player_name", "position", "college", "p_starter", "model_pct_rank", "snap_share_3yr"]
+    hits = u[u["starter"] == 1].sort_values("draft_year")[cols]
+    top = u["model_pct_rank"] > 0.9
+    return {"n": len(u), "starters": hits.round(3).to_dict("records"),
+            "top_decile_snap_share": u.loc[top, "snap_share_3yr"].mean(),
+            "rest_snap_share": u.loc[~top, "snap_share_3yr"].mean(),
+            "top_decile_any_snaps": (u.loc[top, "snap_share_3yr"] >= 0.1).mean(),
+            "rest_any_snaps": (u.loc[~top, "snap_share_3yr"] >= 0.1).mean()}  # fmt: skip
 
 
 def disagreement_figure(df: pd.DataFrame) -> pd.DataFrame:
@@ -70,7 +91,8 @@ def calls(df: pd.DataFrame, n: int = 8) -> dict[str, pd.DataFrame]:
 
 
 def run() -> dict:
-    df = load()
+    allwf = load()
+    df = allwf[allwf["draft_year"].isin(CLASSES) & (allwf["undrafted"] == 0)]
     out = {"n": len(df), "disagreement": disagreement_figure(df).round(3).reset_index().to_dict("records"),
            "by_round": by_round(df).round(3).reset_index().to_dict("records")}  # fmt: skip
     for k, t in calls(df).items():
@@ -80,6 +102,8 @@ def run() -> dict:
                              "actual": up["starter"].mean()}  # fmt: skip
     out["top40_downgrades"] = {"slot": down["p_pick_only"].mean(), "model": down["p_starter"].mean(),
                                "actual": down["starter"].mean()}  # fmt: skip
+    base = json.loads((path("artifacts") / "metrics.json").read_text())["base_model"]
+    out["undrafted"] = undrafted(base)
     (path("artifacts") / "report_2021_2023.json").write_text(json.dumps(out, indent=2, default=str))
     return out
 

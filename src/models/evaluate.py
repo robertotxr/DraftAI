@@ -88,6 +88,27 @@ def summarize(bt: pd.DataFrame, specs: list[str]) -> dict:
     return out
 
 
+def summarize_undrafted(df: pd.DataFrame, specs: list[str]) -> dict:
+    """Undrafted combine invitees: the slot says nothing within this group, so does the profile rank them?
+
+    With ~1% starters, AUC on the starter label is noisy; Spearman correlation with the 3-year snap
+    share and the snap share of the model's top decile use the full outcome instead.
+    """
+    share = df["snap_share_3yr"]
+    out = {"n": int(len(df)), "classes": sorted(int(c) for c in df["draft_year"].unique()),
+           "starters": int(df["starter"].sum()), "mean_snap_share": float(share.mean()), "models": {}}  # fmt: skip
+    for s in specs:
+        p = df[f"p_{s}"]
+        top = p >= p.quantile(0.9)
+        out["models"][s] = {
+            "auc": float(roc_auc_score(df["starter"].astype(int), p)),
+            "spearman_snap_share": float(p.corr(share, method="spearman")),
+            "top_decile_snap_share": float(share[top].mean()),
+            "rest_snap_share": float(share[~top].mean()),
+        }
+    return out
+
+
 def _style(ax):
     ax.spines[["top", "right"]].set_visible(False)
     ax.spines[["left", "bottom"]].set_color(MUTED)

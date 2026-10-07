@@ -76,12 +76,13 @@ def norm_school(school: str | None) -> str:
 def resolve(picks: pd.DataFrame, cfbd_draft: pd.DataFrame, stat_players: pd.DataFrame) -> pd.DataFrame:
     """Link every nflverse draft pick to a CFBD college player id.
 
-    picks:        season, pick, pfr_player_id, pfr_player_name, college
+    picks:        season, pick, pfr_player_id, pfr_player_name, college (pick is NaN for undrafted
+                  players; extra columns such as player_key pass through to the output)
     cfbd_draft:   year, overall, collegeAthleteId, name, collegeTeam
     stat_players: player_id, player, team, season  (one row per player-season-team in CFBD stats)
     """
-    p = picks[["season", "pick", "pfr_player_id", "pfr_player_name", "college"]].merge(
-        cfbd_draft[["year", "overall", "collegeAthleteId", "name", "collegeTeam"]],
+    p = picks.merge(
+        cfbd_draft[["year", "overall", "collegeAthleteId", "name", "collegeTeam"]].dropna(subset=["overall"]),
         left_on=["season", "pick"],
         right_on=["year", "overall"],
         how="left",
@@ -106,25 +107,23 @@ def resolve(picks: pd.DataFrame, cfbd_draft: pd.DataFrame, stat_players: pd.Data
         if pd.notna(cid) and str(int(cid)) in ids_by_season.index:
             s_min, s_max = ids_by_season.loc[str(int(cid))]
             if s_max >= lo and s_min <= hi:
-                out.append((r.season, r.pick, str(int(cid)), "cfbd_draft_id"))
+                out.append((str(int(cid)), "cfbd_draft_id"))
                 continue
         cand = by_name.get(r.name_key, sp.iloc[:0])
         cand = cand[cand.season.between(lo, hi)]
         if cand.empty:
-            out.append((r.season, r.pick, None, "unmatched"))
+            out.append((None, "unmatched"))
             continue
         by_school = cand[cand.school_key == r.school_key]
         pool = by_school if not by_school.empty else cand
         ids = pool.groupby("player_id")["season"].max().sort_values(ascending=False)
         if len(ids) == 1 or (ids.iloc[0] > ids.iloc[1]):
             method = "name_school" if not by_school.empty else "name_only_recent"
-            out.append((r.season, r.pick, ids.index[0], method))
+            out.append((ids.index[0], method))
         else:
-            out.append((r.season, r.pick, None, "ambiguous"))
-    res = pd.DataFrame(out, columns=["season", "pick", "college_player_id", "match_method"])
-    return p[["season", "pick", "pfr_player_id", "pfr_player_name", "school_key", "collegeTeam"]].merge(
-        res, on=["season", "pick"]
-    )
+            out.append((None, "ambiguous"))
+    res = pd.DataFrame(out, columns=["college_player_id", "match_method"], index=p.index)
+    return pd.concat([p[[*picks.columns, "school_key", "collegeTeam"]], res], axis=1)
 
 
 def _last_name_match(a: pd.Series, b: pd.Series) -> pd.Series:

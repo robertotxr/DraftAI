@@ -80,8 +80,11 @@ def test_walk_forward_trains_only_on_classes_known_before_draft(monkeypatch):
     monkeypatch.setattr(train, "fit_predict", fake_fit_predict)
     monkeypatch.setattr(train, "fit_quantiles", lambda tr, feats: None)
     monkeypatch.setattr(train, "predict_quantiles", lambda m, df, feats: np.zeros((len(df), 3)))
-    rows = [(f"{y}-{i}", y, float(i % 2) if y <= 2018 else np.nan, "WR") for y in range(2013, 2022) for i in range(4)]
-    pros = pd.DataFrame(rows, columns=["player_key", "draft_year", "starter", "pos_group"])
+    monkeypatch.setattr(train, "conformal_widening", lambda tr, feats: {})
+    monkeypatch.setattr(train, "widen", lambda df, w: df)
+    rows = [(f"{y}-{i}", y, float(i % 2) if y <= 2018 else np.nan, "WR", int(i == 3))
+            for y in range(2013, 2022) for i in range(4)]  # fmt: skip
+    pros = pd.DataFrame(rows, columns=["player_key", "draft_year", "starter", "pos_group", "undrafted"])
     years = [2017, 2019, 2021]
     train.walk_forward(pros, years)
     assert set(seen) == set(years)
@@ -90,3 +93,4 @@ def test_walk_forward_trains_only_on_classes_known_before_draft(monkeypatch):
         for tr in trains:
             assert len(tr) and tr["draft_year"].max() <= year - LAG
             assert tr["starter"].notna().all()
+            assert (tr["undrafted"] == 0).all()  # classifiers learn from drafted players only

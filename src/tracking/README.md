@@ -4,9 +4,9 @@ Original tackling metric on BDB 2024 tracking data, built so it can become a BDB
 
 ## Data note
 
-The BDB 2024 data is not in the repo. Kaggle returns 403 until the competition rules are accepted at
-https://www.kaggle.com/competitions/nfl-big-data-bowl-2024/rules. Then download the files
-(games, plays, players, tackles, tracking_week_1..9 as CSV) into `data/raw/bdb/`.
+The BDB 2024 data is not in the repo (competition rules forbid redistribution). In August 2025 the NFL
+replaced the competition files on Kaggle with a 78-byte README, so they can no longer be downloaded.
+With a local copy, put the CSVs (games, plays, players, tackles, tracking_week_1..9) into `data/raw/bdb/`.
 `python -m src.tracking.run` logs a warning and exits cleanly while the files are missing.
 
 ## Metric

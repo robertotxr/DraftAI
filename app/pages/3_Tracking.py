@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import streamlit as st  # noqa: E402
 
-from app.lib import KAGGLE_RULES, load_tracking, setup  # noqa: E402
+from app.lib import KAGGLE_DATA, load_tracking, setup  # noqa: E402
 
 setup("Tracking", ":material/timeline:")
 st.title("Tackles Over Expected")
@@ -18,10 +18,11 @@ st.caption("An original tackling metric built on NFL Big Data Bowl 2024 player t
 t = load_tracking()
 if t is None:
     st.info(
-        "The tracking data is not set up yet. Kaggle requires accepting the competition rules before the files can "
-        f"be downloaded: [accept the rules here]({KAGGLE_RULES}). Then run these two commands in the repo:"
+        "The tracking data is not available. In August 2025 the NFL replaced the "
+        f"[BDB 2024 files on Kaggle]({KAGGLE_DATA}) with a README, so they can no longer be downloaded. "
+        "With a local copy of the CSVs in data/raw/bdb, this command builds the metric:"
     )
-    st.code("make bdb\nmake tracking", language="bash")
+    st.code("make tracking", language="bash")
     st.markdown(
         "Tackles Over Expected compares each defender's tackles and assists with what a frame-level model expects "
         "given distance, closing speed, pursuit angle and blockers. The leaderboard, play animation and validation "

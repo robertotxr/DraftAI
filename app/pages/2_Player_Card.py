@@ -18,12 +18,14 @@ from app.lib import (  # noqa: E402
     MUTED,
     PERCENT_METRICS,
     PRODUCTION_BY_GROUP,
+    draft_text,
     feature_label,
     load_board,
     load_comps,
     load_shap_row,
     outcome_text,
     pct,
+    pick_label,
     setup,
 )
 
@@ -32,7 +34,8 @@ st.title("Player Card")
 
 board = load_board()
 labels = {
-    r.player_key: f"{r.player_name} ({r.position}, {r.college}, {r.draft_year} #{r.pick})" for r in board.itertuples()
+    r.player_key: f"{r.player_name} ({r.position}, {r.college}, {r.draft_year} #{pick_label(r.pick)})"
+    for r in board.itertuples()
 }
 keys = list(labels)
 default = st.session_state.get("player_key")
@@ -45,17 +48,21 @@ p = board[board["player_key"] == key].iloc[0]
 
 # Header
 st.header(p["player_name"])
-st.caption(
-    f"{p['position']} | {p['college']} | Class of {p['draft_year']} | Round {p['round']}, pick {p['pick']} "
-    f"({p['team']}) | {p['ht_in'] // 12:.0f}'{p['ht_in'] % 12:.0f}\" {p['wt_lb']:.0f} lb"
+body = (
+    f" | {p['ht_in'] // 12:.0f}'{p['ht_in'] % 12:.0f}\" {p['wt_lb']:.0f} lb"
     if pd.notna(p["ht_in"]) and pd.notna(p["wt_lb"])
-    else f"{p['position']} | {p['college']} | Class of {p['draft_year']} | Round {p['round']}, pick {p['pick']} ({p['team']})"
+    else ""
 )
+st.caption(f"{p['position']} | {p['college']} | Class of {p['draft_year']} | {draft_text(p)}{body}")
 
 # Key numbers
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("P(starter)", pct(p["p_starter"]), f"{p['value_over_slot'] * 100:+.1f} pts vs slot")
-k2.metric("Slot-only P(starter)", pct(p["p_pick_only"]))
+if p["undrafted"] == 1:
+    k1.metric("P(starter)", pct(p["p_starter"], 1))
+    k2.metric("Slot-only P(starter)", "No slot", "undrafted: no market price", delta_color="off")
+else:
+    k1.metric("P(starter)", pct(p["p_starter"]), f"{p['value_over_slot'] * 100:+.1f} pts vs slot")
+    k2.metric("Slot-only P(starter)", pct(p["p_pick_only"]))
 k3.metric(
     "80% range, 3-yr snap share", f"{pct(p['q10'])} to {pct(p['q90'])}", f"median {pct(p['q50'])}", delta_color="off"
 )
@@ -186,7 +193,7 @@ else:
             "Comp": cp["player_name"],
             "Pos": cp["position"],
             "Class": cp["draft_year"],
-            "Pick": cp["pick"],
+            "Pick": cp["pick"].map(pick_label),
             "Similarity": cp["similarity"],
             "P(starter) then": cp["p_starter"],
             "3-yr snap share": cp["snap_share_3yr"],
@@ -202,7 +209,6 @@ else:
             "P(starter) then": st.column_config.NumberColumn(format="percent"),
             "3-yr snap share": st.column_config.NumberColumn(format="percent"),
             "Class": st.column_config.NumberColumn(format="%d"),
-            "Pick": st.column_config.NumberColumn(format="%d"),
         },
     )
     st.caption("Comps come only from classes whose 3-year outcome was known before this player's draft.")

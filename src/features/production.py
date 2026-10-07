@@ -161,7 +161,7 @@ def career_features(seasons: pd.DataFrame, prospects: pd.DataFrame) -> pd.DataFr
         r["breakout_age_def"] = breakout_age(c, "def_playmaking_share", p["breakout_def_share"])
         # "Never broke out" is information, distinct from "no data": flag it explicitly.
         for name, metric in [("rec", "dominator"), ("scrim", "scrimmage_share"), ("def", "def_playmaking_share")]:
-            has = c[metric].notna().any()
+            has = c[metric].notna().any() and c["age"].notna().any()
             r[f"never_broke_out_{name}"] = float(np.isnan(r[f"breakout_age_{name}"])) if has else np.nan
         r["has_def_stats"] = int(c["defensive_tot"].notna().any()) if "defensive_tot" in c else 0
         rows.append(r)

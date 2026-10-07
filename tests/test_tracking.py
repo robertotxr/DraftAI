@@ -158,8 +158,8 @@ def test_group_folds_never_share_a_game():
 def test_run_without_data_warns_and_returns_none(paths, caplog):
     with caplog.at_level(logging.WARNING):
         assert run.run() is None
-    assert data.RULES_URL in caplog.text
-    with pytest.raises(FileNotFoundError, match="rules"):
+    assert data.DATA_URL in caplog.text
+    with pytest.raises(FileNotFoundError, match="README"):
         data.check_data()
 
 

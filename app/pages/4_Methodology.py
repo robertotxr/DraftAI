@@ -104,8 +104,9 @@ for col, name in ((c1, "reliability.png"), (c2, "model_skill.png")):
 st.header("Outcome ranges")
 st.markdown(
     f"""
-The 80% range comes from quantile models (10th, 50th, 90th percentile of 3-year snap share), widened by **conformal
-calibration** using only earlier out-of-sample classes. Out of sample, the range covered the true outcome
+The 80% range comes from quantile models (10th, 50th, 90th percentile of 3-year snap share), widened by
+**cross-conformal calibration**: leave-classes-out residuals within the training classes, computed separately for
+round 1, rounds 2-3, rounds 4-7 and undrafted players. Out of sample, the range covered the true outcome
 **{pct(m["interval_80_coverage"])}** of the time against an 80% target, and the median was off by
 {m["interval_median_abs_error"] * 100:.1f} points of snap share on average.
 {"Ranges run slightly wide (conservative)." if m["interval_80_coverage"] >= 0.8 else "Treat ranges as somewhat optimistic."}
@@ -118,6 +119,21 @@ sg = load_shap_global().head(12)
 sg = sg.assign(Feature=sg["feature"].map(feature_label))
 st.bar_chart(sg.set_index("Feature")["mean_abs_shap"], horizontal=True, color="#2a78d6")
 st.caption("Mean absolute SHAP contribution (log-odds) in the explanation model. Draft slot dominates.")
+
+st.header("Undrafted players")
+u = m["undrafted"]
+um = u["models"][m["base_model"]]
+st.markdown(
+    f"""
+Combine invitees who went undrafted are scored too ({u["n"]:,} labeled players in the walk-forward classes
+{u["classes"][0]}-{u["classes"][-1]}). Only **{u["starters"]}** became starters, so the useful question is ranking, not
+probability. The classifiers are trained on drafted players; an undrafted term in the blend sets the probability level.
+Their predicted P(starter) averaged {pct(u["held_out"]["mean_p_blend"], 1)} in the backtest classes, against an actual
+{pct(u["held_out"]["starter_rate"], 1)}. The model's top decile averaged {pct(um["top_decile_snap_share"], 1)} of snaps
+over three years, against {pct(um["rest_snap_share"], 1)} for the rest. There is no slot price for these players, so
+value over slot is blank.
+"""
+)
 
 st.header("Athletic scores and comps")
 st.markdown(
@@ -136,7 +152,8 @@ st.markdown(
 - No 10-yard split and no pro-day data: only combine results, so non-attendees lack athletic scores.
 - College defensive stats exist only from 2016 (CFBD), so earlier defenders have missing, not zero, production.
 - Offensive linemen have no production stats; they are judged on slot, size and testing.
-- Only drafted players are covered; undrafted free agents are outside the data.
+- Undrafted players are covered only if they were invited to the combine; with so few undrafted starters, their
+  probabilities are rough.
 - Target share is a usage proxy; true targets and routes run (yards per route run) are not in free data.
 - Snap share depends on scheme, depth chart and injuries, and mixes talent with draft-capital commitment.
 - Small samples per position group and a four-class backtest mean the confidence on any one claim is limited.

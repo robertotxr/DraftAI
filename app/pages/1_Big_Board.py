@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 
-from app.lib import POS_GROUPS, load_board, pct, select_player, setup  # noqa: E402
+from app.lib import POS_GROUPS, load_board, pct, pick_label, select_player, setup  # noqa: E402
 
 setup("Big Board", ":material/format_list_numbered:")
 st.title("Big Board")
@@ -18,12 +18,15 @@ st.title("Big Board")
 board = load_board()
 years = sorted(board["draft_year"].unique(), reverse=True)
 
-f1, f2, f3 = st.columns([1, 3, 1])
+f1, f2, f3, f4 = st.columns([1, 3, 1, 1])
 year = f1.selectbox("Draft class", years, index=0)
 groups = f2.multiselect("Position group", POS_GROUPS, default=[], placeholder="All positions")
 sort_by = f3.selectbox("Sort by", ["P(starter)", "Value over slot", "Pick"])
+with_udfa = f4.toggle("Undrafted", value=False, help="Add combine invitees who went undrafted (UDFA)")
 
 df = board[board["draft_year"] == year]
+if not with_udfa:
+    df = df[df["undrafted"] == 0]
 if groups:
     df = df[df["pos_group"].isin(groups)]
 df = df.sort_values({"P(starter)": "p_starter", "Value over slot": "value_over_slot", "Pick": "pick"}[sort_by],
@@ -37,7 +40,7 @@ else:
 
 view = pd.DataFrame(
     {
-        "Pick": df["pick"],
+        "Pick": df["pick"].map(pick_label),
         "Player": df["player_name"],
         "Pos": df["position"],
         "College": df["college"],
@@ -50,7 +53,7 @@ view = pd.DataFrame(
     }
 )
 cfg = {
-    "Pick": st.column_config.NumberColumn(format="%d", width="small"),
+    "Pick": st.column_config.TextColumn(width="small"),
     "P(starter)": st.column_config.ProgressColumn(min_value=0, max_value=1, format="percent"),
     "Slot-only P": st.column_config.ProgressColumn(min_value=0, max_value=1, format="percent"),
     "Value over slot": st.column_config.NumberColumn(

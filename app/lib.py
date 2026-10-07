@@ -18,7 +18,7 @@ from src.config import path  # noqa: E402
 from src.db import Warehouse  # noqa: E402
 
 MODEL, MARKET, ATHLETIC, MUTED = "#2a78d6", "#eb6834", "#1baf7a", "#9a9893"
-KAGGLE_RULES = "https://www.kaggle.com/competitions/nfl-big-data-bowl-2024/rules"
+KAGGLE_DATA = "https://www.kaggle.com/competitions/nfl-big-data-bowl-2024/data"
 POS_GROUPS = ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "DB"]
 
 MODEL_LABELS = {
@@ -114,6 +114,16 @@ def pct(x, digits: int = 0) -> str:
     return "n/a" if x is None or pd.isna(x) else f"{x * 100:.{digits}f}%"
 
 
+def pick_label(pick) -> str:
+    return "UDFA" if pd.isna(pick) else str(int(pick))
+
+
+def draft_text(row: pd.Series) -> str:
+    if row["undrafted"] == 1:
+        return "Undrafted (combine invitee)"
+    return f"Round {int(row['round'])}, pick {int(row['pick'])} ({row['team']})"
+
+
 def setup(title: str, icon: str) -> None:
     st.set_page_config(page_title=f"{title} | DraftAI", page_icon=icon, layout="wide")
 
@@ -139,7 +149,7 @@ def load_table(name: str) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def load_board() -> pd.DataFrame:
-    """Prospects joined with predictions: one row per drafted player."""
+    """Prospects joined with predictions: one row per drafted player or undrafted combine invitee."""
     pros, pred = load_table("prospects"), load_table("predictions")
     keep = ["player_key", "p_starter", "p_pick_only", "q10", "q50", "q90", "prediction_type", "confidence",
             "value_over_slot"]  # fmt: skip

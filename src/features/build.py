@@ -2,7 +2,7 @@
 
 marts.athletic          every combine participant, scored
 marts.college_seasons   every college player-season with context-adjusted production
-marts.prospects         one row per drafted player: pre-draft features + NFL outcomes (labels)
+marts.prospects         one row per drafted player or undrafted combine invitee: pre-draft features + NFL outcomes (labels)
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from src.features import athletic, production
 
 log = logging.getLogger(__name__)
 
+UDFA_PICK = 263
 P5 = {"SEC", "Big Ten", "Big 12", "ACC", "Pac-12", "FBS Independents"}
 
 
@@ -59,13 +60,11 @@ def run() -> None:
     seasons = production.apply_opponent_adjustment(seasons)
     wh.write("marts.college_seasons", seasons)
 
-    pros = picks.merge(
-        ident[["season", "pick", "college_player_id", "match_method"]],
-        left_on=["draft_year", "pick"],
-        right_on=["season", "pick"],
-        how="left",
-    ).drop(columns="season")
+    pros = picks.merge(ident[["player_key", "college_player_id", "match_method"]], on="player_key", how="left")
     pros = pros.merge(births, left_on="pfr_player_id", right_on="pfr_id", how="left").drop(columns="pfr_id")
+    # Roster birth dates exist for an undrafted player only if he later made an NFL roster: post-draft
+    # information. Drop them so age features stay missing for every undrafted player alike.
+    pros.loc[pros["undrafted"] == 1, "birth_date"] = pd.NaT
     career = production.career_features(seasons, pros)
     pros = pros.merge(career, on="player_key", how="left")
 
@@ -75,16 +74,16 @@ def run() -> None:
         if col.endswith(("_score", "_measured"))
         or col in ("drills_measured", "ht_in", "wt_lb", *c["athletic"]["drills"])
     ]
-    a = ath.sort_values("combine_year").drop_duplicates("pfr_id", keep="last")
-    pros = pros.merge(
-        a[["pfr_id", "combine_year", *ath_cols]], left_on="pfr_player_id", right_on="pfr_id", how="left"
-    ).drop(columns="pfr_id")
+    a = ath.sort_values("combine_year").drop_duplicates("combine_key", keep="last")
+    pros = pros.merge(a[["combine_key", "combine_year", *ath_cols]], on="combine_key", how="left")
     # Only use a combine that happened before the draft.
     late = pros["combine_year"] > pros["draft_year"]
     pros.loc[late, ath_cols] = np.nan
     pros["attended_combine"] = pros["combine_year"].notna().astype(int)
+    pros["college_conference"] = pros["college_conference"].fillna(pros["final_conference"])
     pros["power_conf"] = pros["college_conference"].isin(P5).astype(int)
-    pros["log_pick"] = np.log(pros["pick"])
+    # Undrafted players sit just past the last compensatory pick; the `undrafted` flag carries the rest.
+    pros["log_pick"] = np.log(pros["pick"].fillna(UDFA_PICK))
 
     pros = pros.merge(outcomes(picks, wh.table("staging.nfl_snap_shares")), on="player_key", how="left")
     wh.write("marts.prospects", pros)

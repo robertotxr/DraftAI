@@ -7,7 +7,7 @@ import pandas as pd
 
 from src.config import path
 
-RULES_URL = "https://www.kaggle.com/competitions/nfl-big-data-bowl-2024/rules"
+DATA_URL = "https://www.kaggle.com/competitions/nfl-big-data-bowl-2024/data"
 STATIC_FILES = ("games.csv", "plays.csv", "players.csv", "tackles.csv")
 KEYS = ["gameId", "playId"]
 FIELD_LENGTH, FIELD_WIDTH = 120.0, 160 / 3
@@ -41,8 +41,8 @@ def check_data(weeks: list[int] | None = None) -> list[int]:
     if missing or not wanted:
         raise FileNotFoundError(
             f"BDB 2024 data not found in {path('bdb')} (missing: {missing or 'all tracking weeks'}). "
-            f"Kaggle returns 403 until you accept the competition rules at {RULES_URL}, "
-            "then download nfl-big-data-bowl-2024 into that folder."
+            f"The files at {DATA_URL} were replaced by a README in August 2025; "
+            "copy a local download of the CSVs into that folder."
         )
     return wanted
 

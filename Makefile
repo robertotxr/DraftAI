@@ -5,7 +5,7 @@ PY := .venv/bin/python
 setup:            ## create the virtualenv and install pinned dependencies
 	python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
-bdb:              ## download Big Data Bowl 2024 (accept the rules on kaggle.com first)
+bdb:              ## download Big Data Bowl 2024 (files were taken down from Kaggle in Aug 2025)
 	set -a; . ./.env; set +a; .venv/bin/kaggle competitions list -s "big data bowl"
 	set -a; . ./.env; set +a; .venv/bin/kaggle competitions download -c nfl-big-data-bowl-2024 -p data/raw/bdb && cd data/raw/bdb && unzip -o -q '*.zip'
 
