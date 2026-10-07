@@ -58,7 +58,11 @@ production:
   breakout_def_share: 0.15        # share of team sacks + TFL for front-seven
 
 model:
-  backtest_classes: [2021, 2022, 2023]
+  # Classes scored walk-forward (as of draft night). Earlier classes only get in-sample scores.
+  walk_forward_from: 2017
+  # Labeled classes used for the headline backtest metrics. Starts in 2020 because the market+model
+  # blend needs at least one earlier out-of-sample class (2017) whose labels were known by that draft.
+  backtest_classes: [2020, 2021, 2022, 2023]
   # For draft class Y, outcomes are only known for classes <= Y - label_lag.
   label_lag: 3
   lgbm:
@@ -71,6 +75,7 @@ model:
     colsample_bytree: 0.8
     reg_lambda: 1.0
     verbose: -1
+    n_jobs: 4
 
 comps:
   k: 5
@@ -79,3 +84,18 @@ tracking:
   frames_ahead: 5            # horizon (0.5 s) for the "tackle soon" label
   contact_radius: 1.5        # yards
   min_opportunities: 20      # per player, for leaderboards
+  intercept_seconds: 1.0     # carrier position is projected this far ahead for the pursuit angle
+  opportunity_radius: 5.0    # yards; a defender-play counts as an opportunity if he got this close to the carrier
+  n_splits: 5                # GroupKFold by game
+  animation_plays: 25        # plays kept for the animation page
+  lgbm:
+    n_estimators: 200
+    learning_rate: 0.05
+    num_leaves: 31
+    min_child_samples: 50
+    subsample: 0.8
+    subsample_freq: 1
+    colsample_bytree: 0.8
+    reg_lambda: 1.0
+    verbose: -1
+    n_jobs: 4
