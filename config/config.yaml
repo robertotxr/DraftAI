@@ -4,6 +4,7 @@ paths:
   cfbd_cache: data/raw/cfbd
   nflverse_cache: data/raw/nflverse
   bdb: data/raw/bdb
+  bdb26: data/raw/bdb26
   warehouse_url: duckdb:///data/warehouse.duckdb
   artifacts: artifacts
   figures: reports/figures
@@ -91,6 +92,24 @@ tracking:
     n_estimators: 200
     learning_rate: 0.05
     num_leaves: 31
+    min_child_samples: 50
+    subsample: 0.8
+    subsample_freq: 1
+    colsample_bytree: 0.8
+    reg_lambda: 1.0
+    verbose: -1
+    n_jobs: 4
+
+closing:
+  # Closing Over Expected on Big Data Bowl 2026 (2023 pass plays, ball in the air).
+  min_plays: 40              # per defender, for leaderboards and draft-link correlations
+  n_splits: 5                # GroupKFold by game
+  animation_plays: 25        # plays kept for the animation page
+  max_animation_air_frames: 40   # animation candidates: ball in the air at most this long (0.1 s frames)
+  lgbm:
+    n_estimators: 300
+    learning_rate: 0.03
+    num_leaves: 15
     min_child_samples: 50
     subsample: 0.8
     subsample_freq: 1

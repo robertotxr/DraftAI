@@ -27,9 +27,10 @@ def run_step(step: str) -> None:
 
         knn.run()
     elif step == "tracking":
-        from src.tracking import run
+        from src.tracking import closing, run
 
-        run.run()
+        run.run()  # BDB 2024 tackles (skips with a warning while the data is missing)
+        closing.run()  # BDB 2026 closing over expected
     elif step == "report":
         from src.models import report
 

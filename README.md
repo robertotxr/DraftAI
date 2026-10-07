@@ -28,7 +28,7 @@ make test lint
 make app                   # streamlit big board at localhost:8501
 ```
 
-- `make bdb` downloads the Big Data Bowl 2024 data. The competition's files were taken down in August 2025 (only a README remains), so the download fails and the tracking step logs a warning. Anyone with a local copy can drop the CSVs into `data/raw/bdb/` and run `make tracking`.
+- `make bdb` downloads the Big Data Bowl 2026 Analytics data into `data/raw/bdb26/` (Kaggle credentials and accepted rules required). The 2024 files behind Tackles Over Expected were taken down in August 2025; with a local copy in `data/raw/bdb/` that metric still runs, otherwise it logs a warning and is skipped.
 - The pipeline is idempotent and cached. nflverse pulls are stored as parquet and every CFBD response as JSON under `data/raw/`, so a rerun makes zero API calls.
 - CFBD usage is logged to `data/raw/cfbd/_call_log.csv` from the `X-CallLimit-Remaining` header. A full build uses about 66 calls of the 1,000/month free tier, and the client refuses to call when fewer than 50 remain.
 - Settings live in [config/config.yaml](config/config.yaml): paths, seasons, thresholds, model parameters, seed.
@@ -40,7 +40,7 @@ src/ingest/    nflverse (nfl_data_py) + CFBD clients, identity resolution, raw -
 src/features/  athletic score, opponent-adjusted production, marts.prospects
 src/models/    feature allowlists + leakage guard, walk-forward training, evaluation, SHAP, report
 src/comps/     kNN comps on position-specific profiles
-src/tracking/  BDB 2024 tackle-opportunity model, Tackles Over Expected, play animation
+src/tracking/  Closing Over Expected (BDB 2026), Tackles Over Expected (BDB 2024), play animations
 src/db.py      warehouse access layer (DuckDB by default, Postgres via the same interface)
 app/           Streamlit: Big Board, Player Card, Tracking, Methodology
 tests/         feature transforms, identity matching, leakage checks, comps, tracking
@@ -89,7 +89,11 @@ The warehouse has three layers. `raw.*` holds the source payloads, `staging.*` h
 
 **Comps.** NaN-aware kNN on standardized, position-specific profiles (body + athletic + production). Comps for class Y come only from classes whose outcome was known by then, so every comp shows a real result.
 
-**Tracking metric.** Tackles Over Expected on BDB 2024. For each defender-play, a LightGBM model (GroupKFold by game) scores the tackle probability at the first frame the defender closes within 5 yards of the ball carrier. Features include distance, closing speed, pursuit angle to the projected intercept point, blockers in the lane and sideline leverage. TOE is tackles + assists minus that expectation. Validation covers odd/even-week stability and correlation with PFF missed-tackle rate. See [src/tracking/README.md](src/tracking/README.md).
+**Tracking metric.** Closing Over Expected (COE) on BDB 2026: how close a coverage defender gets to the targeted receiver by ball arrival versus an out-of-fold LightGBM expectation built from throw-frame geometry (RMSE 2.08 yd vs. 4.09 for a linear baseline; split-half r 0.30; completion is 72-74% in the two lowest COE quintiles and 60% in the highest; no detectable link to combine athleticism, n about 200). The older Tackles Over Expected on BDB 2024 is kept but cannot run without a local copy.
+
+![Closing Over Expected](docs/tracking.png)
+
+**Tackles Over Expected (BDB 2024).** For each defender-play, a LightGBM model (GroupKFold by game) scores the tackle probability at the first frame the defender closes within 5 yards of the ball carrier. Features include distance, closing speed, pursuit angle to the projected intercept point, blockers in the lane and sideline leverage. TOE is tackles + assists minus that expectation. Validation covers odd/even-week stability and correlation with PFF missed-tackle rate. See [src/tracking/README.md](src/tracking/README.md).
 
 ## Known limitations
 
@@ -97,11 +101,11 @@ The warehouse has three layers. `raw.*` holds the source payloads, `staging.*` h
 - CFBD defensive season stats begin in 2016, so defensive production is missing for most early training classes. Offensive linemen have no production stats.
 - No pro-day data, 10-yard splits, route or target data (YPRR), medicals or interviews.
 - The market + model gain is not statistically significant on four held-out classes. The blend is slightly less calibrated (ECE 0.042) than the full model (0.025).
-- The tracking metric is implemented and unit-tested on synthetic plays, but has not run on real data. In August 2025 the NFL replaced the BDB 2024 files on Kaggle with a README, so the tackling data is no longer downloadable.
+- Closing Over Expected runs on real BDB 2026 data (2023 only, one season, modest split-half stability). Tackles Over Expected is unit-tested on synthetic plays only: the BDB 2024 files are no longer downloadable.
 
 ## Next steps
 
-1. Port the tracking metric to data that is still published (Big Data Bowl 2026: 2023 pass plays, ball-in-air closing speed), then link it to college defenders.
+1. Link COE to college defender production once more than one NFL season of tracking is available.
 2. Add pro-day results and PFF-style charting data (targets, routes, pressures) when a licensed source is available.
 3. Model second-contract or AV-per-season outcomes once enough seasons accumulate.
 4. Extend undrafted coverage beyond combine invitees (pro-day-only prospects).

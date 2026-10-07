@@ -19,6 +19,7 @@ from src.db import Warehouse  # noqa: E402
 
 MODEL, MARKET, ATHLETIC, MUTED = "#2a78d6", "#eb6834", "#1baf7a", "#9a9893"
 KAGGLE_DATA = "https://www.kaggle.com/competitions/nfl-big-data-bowl-2024/data"
+BDB26_DATA = "https://www.kaggle.com/competitions/nfl-big-data-bowl-2026-analytics/data"
 POS_GROUPS = ["QB", "RB", "WR", "TE", "OL", "DL", "LB", "DB"]
 
 MODEL_LABELS = {
@@ -184,6 +185,27 @@ def load_tracking() -> dict | None:
         "frames": pd.read_parquet(d / files[0]),
         "leaderboard": pd.read_parquet(d / files[1]),
         "validation": json.loads((d / files[2]).read_text()),
+    }
+
+
+def closing_dir() -> Path:
+    return path("artifacts") / "tracking_closing"
+
+
+@st.cache_data(show_spinner=False)
+def load_closing() -> dict | None:
+    """Closing Over Expected artifacts, or None while the required ones are missing (draft link is optional)."""
+    d = closing_dir()
+    need = ["leaderboard.parquet", "animation_frames.parquet", "animation_plays.parquet", "validation.json"]
+    if not all((d / f).exists() for f in need):
+        return None
+    link = d / "draft_link.parquet"
+    return {
+        "leaderboard": pd.read_parquet(d / need[0]),
+        "frames": pd.read_parquet(d / need[1]),
+        "plays": pd.read_parquet(d / need[2]),
+        "validation": json.loads((d / need[3]).read_text()),
+        "draft_link": pd.read_parquet(link) if link.exists() else None,
     }
 
 
