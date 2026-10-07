@@ -1,0 +1,28 @@
+# Secrets
+.env
+.env.*
+!.env.example
+kaggle.json
+*.pem
+*.key
+
+# Data (raw pulls, BDB data cannot be redistributed, warehouse is rebuilt)
+data/
+!data/.gitkeep
+
+# Model artifacts (rebuilt by `make all`)
+artifacts/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.ipynb_checkpoints/
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/

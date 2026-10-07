@@ -1,0 +1,81 @@
+# All paths are relative to the repository root.
+paths:
+  raw: data/raw
+  cfbd_cache: data/raw/cfbd
+  nflverse_cache: data/raw/nflverse
+  bdb: data/raw/bdb
+  warehouse_url: duckdb:///data/warehouse.duckdb
+  artifacts: artifacts
+  figures: reports/figures
+  cfbd_call_log: data/raw/cfbd/_call_log.csv
+
+seed: 42
+
+years:
+  # Draft classes ingested. Classes up to `last_labeled_class` have three full NFL seasons observed.
+  draft_first: 2013          # nflverse snap counts start with the 2013 season
+  draft_last: 2026
+  last_labeled_class: 2023   # 2023, 2024, 2025 seasons are complete
+  last_nfl_season: 2025
+  college_first: 2008
+  college_last: 2025
+  usage_first: 2013          # CFBD player usage coverage
+
+cfbd:
+  monthly_call_budget: 1000
+  # Refuse to make new calls once the remaining monthly budget drops below this.
+  min_remaining: 50
+
+positions:
+  # Draft-listed position -> modelling group. K/P/LS are excluded.
+  groups:
+    QB: [QB]
+    RB: [RB, FB]
+    WR: [WR]
+    TE: [TE]
+    OL: [OL, T, OT, G, OG, C]
+    DL: [DE, DT, NT, DL]
+    LB: [LB, ILB, OLB]
+    DB: [CB, S, SAF, FS, SS, DB]
+
+target:
+  horizon_seasons: 3
+  # Binary outcome: average share of team snaps over the first three seasons.
+  starter_threshold: 0.50
+  quantiles: [0.1, 0.5, 0.9]
+
+athletic:
+  drills: [forty, vertical, broad_jump, cone, shuttle, bench]
+  # Lower is better for these drills.
+  lower_is_better: [forty, cone, shuttle]
+  # Minimum number of measured drills for a composite score.
+  min_drills: 3
+  # Norms come from combines up to this year, so backtest classes are scored against an older population.
+  norm_max_year: 2020
+
+production:
+  breakout_dominator: 0.20        # receivers / backs
+  breakout_def_share: 0.15        # share of team sacks + TFL for front-seven
+
+model:
+  backtest_classes: [2021, 2022, 2023]
+  # For draft class Y, outcomes are only known for classes <= Y - label_lag.
+  label_lag: 3
+  lgbm:
+    n_estimators: 300
+    learning_rate: 0.03
+    num_leaves: 15
+    min_child_samples: 20
+    subsample: 0.8
+    subsample_freq: 1
+    colsample_bytree: 0.8
+    reg_lambda: 1.0
+    verbose: -1
+
+comps:
+  k: 5
+
+tracking:
+  frames_ahead: 5            # horizon (0.5 s) for the "tackle soon" label
+  contact_radius: 1.5        # yards
+  min_opportunities: 20      # per player, for leaderboards
