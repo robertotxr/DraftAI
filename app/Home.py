@@ -49,7 +49,7 @@ lifts that to {pct(blend["brier_skill"], 1)}. The gain is small: a paired bootst
 slot in {pct(boot["p_better"])} of resamples. So the honest read is **the market is hard to beat, and the model is
 most useful at the margin**: flagging players the slot over- or under-rates, with a stated level of uncertainty.
 The 80% outcome range covers the real 3-year snap share {pct(m["interval_80_coverage"])} of the time,
-below its 80% target, so treat ranges as slightly narrow.
+{"at or above its 80% target, so ranges are slightly conservative." if m["interval_80_coverage"] >= 0.8 else "below its 80% target, so treat ranges as slightly narrow."}
 """
 )
 

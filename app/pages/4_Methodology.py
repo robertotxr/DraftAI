@@ -107,7 +107,8 @@ st.markdown(
 The 80% range comes from quantile models (10th, 50th, 90th percentile of 3-year snap share), widened by **conformal
 calibration** using only earlier out-of-sample classes. Out of sample, the range covered the true outcome
 **{pct(m["interval_80_coverage"])}** of the time against an 80% target, and the median was off by
-{m["interval_median_abs_error"] * 100:.1f} points of snap share on average. Treat ranges as somewhat optimistic.
+{m["interval_median_abs_error"] * 100:.1f} points of snap share on average.
+{"Ranges run slightly wide (conservative)." if m["interval_80_coverage"] >= 0.8 else "Treat ranges as somewhat optimistic."}
 The **confidence grade** (High / Medium / Low) reflects data completeness (testing, college record, consensus rank) and range width.
 """
 )
